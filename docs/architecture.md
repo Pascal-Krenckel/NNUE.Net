@@ -26,6 +26,14 @@ features ──(shared int16 weights)──▶ Slots accumulators ──activati
 | ClippedReLU (feature transformer) | `clamp(a, 0, 1)` | Int16: `clamp(acc, 0, ActivationQuantization)` · Int8: `clamp(acc, 0, 127)` |
 | SquaredClippedReLU (feature transformer) | `clamp(a, 0, 1)²` | Int16: `Σ ((c·w) as int16)·c` with `c = clamp(acc, 0, ActivationQuantization)` · Int8: `(c·c) >> 9`, `c = clamp(acc, 0, 255)` |
 | Pairwise (feature transformer) | `clamp(a, 0, 1)·clamp(b, 0, 1)` | `(clamp(a, 0, 255) · clamp(b, 0, 255)) >> 9` |
+| MaxPooling (feature transformer) | `max(clamp(a, 0, 1), clamp(b, 0, 1))` | `max(clamp(a, 0, 127), clamp(b, 0, 127))` |
+| AveragePooling (feature transformer) | `(clamp(a, 0, 1) + clamp(b, 0, 1)) / 2` | `(clamp(a, 0, 127) + clamp(b, 0, 127) + 1) >> 1` |
+| Quantmoid4 (hidden) | `v = 1 - min(\|z\|, 1)`, `q = 127/256 · v²`, `z < 0 ? q : 126/127 - q` | `x = z_int >> 6`, `v = 127 - min(\|x\|, 127)`, `q = v² >> 8`, `x < 0 ? q : 126 - q` |
+
+Pairwise and the two pooling activations combine the first and the second half of an accumulator, so a slot contributes
+`AccumulatorSize / 2` inputs. Pooling uses 127 as 1.0 (like clipped ReLU), pairwise 255. Quantmoid4 is the activation that the
+Stockfish wiki describes as the integer replacement of `sigmoid(4x)`; its float form is continuous and smooth, the trainer uses its
+exact derivative `127/128 · (1 - min(|z|, 1))`.
 
 ### Int8 arithmetic
 
@@ -70,6 +78,8 @@ not been measured yet. Adding a backend means one kernel class, one backend stru
 - **Sparse first layer.** After the feature transformer many activations are zero. `SparseInputMode.Auto` counts the non-zero
   4-byte chunks; if at most 40 % are non-zero it builds their index list (a 256-entry lookup table per 8 chunks, branch free) and
   only multiplies those. Results are identical; it is several times faster on sparse activations and slightly slower on dense ones.
+- **Pooling and Quantmoid4** run on the 128-bit kernels (`Portable128Kernels`) on every SIMD backend: they touch a few hundred bytes per
+  evaluation, next to the dense layers they are negligible.
 - **The last layer** has one output and is stored as a contiguous vector, so it is a plain dot product.
 - **Scratch memory** of an Int8 evaluation is `stackalloc` without zeroing (zeroing cost 5-12 %), aligned to 64 bytes by hand.
 - **Checks** are combined with non-short-circuit operators, so the valid path costs one predictable branch; the failure paths are

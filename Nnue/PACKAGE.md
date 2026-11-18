@@ -7,7 +7,7 @@ or domain with sparse binary inputs.
 - SIMD kernels for AVX512-VNNI (net11.0 build), AVX-512, AVX-VNNI, AVX2, SSSE3 and NEON, plus a scalar reference; all bit-identical,
   chosen automatically for the CPU.
 - Incremental accumulator updates: `child = parent - removed + added` in one call, going back to the parent is free.
-- Int16 networks with one output layer, or Stockfish-style Int8 networks with hidden layers, pairwise and squared activations,
+- Int16 networks with one output layer, or Stockfish-style Int8 networks with hidden layers, pairwise, pooling, squared and Quantmoid4 activations,
   dense and skip connections and output buckets.
 - A float model, an Adam trainer and a quantizer for small networks; import of networks trained with bullet.
 - Loading from files, streams, memory, asynchronously or memory-mapped. Trimming- and AOT-compatible.

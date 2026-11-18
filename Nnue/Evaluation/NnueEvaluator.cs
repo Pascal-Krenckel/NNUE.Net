@@ -51,24 +51,50 @@ public sealed unsafe class NnueEvaluator
     {
         ArgumentNullException.ThrowIfNull(model);
         model.ThrowIfDisposed();
-        if (backend is { } requested && !Enum.IsDefined(requested)) throw new ArgumentOutOfRangeException(nameof(backend), $"Unknown backend {(int)requested}.");
-        if (!Enum.IsDefined(sparseInput)) throw new ArgumentOutOfRangeException(nameof(sparseInput), $"Unknown sparse input mode {(int)sparseInput}.");
-        var b = backend ?? SimdSupport.Best;
-        if (!SimdSupport.IsSupported(b)) throw new PlatformNotSupportedException($"{b} is not supported on this CPU.");
-        Model = model; Backend = b; SparseInput = sparseInput; _modelMemory = model.Memory;
-        var spec = model.Spec; var layout = model.Layout;
-        _accumulatorSize = layout.AccumulatorSize; _slotCount = layout.Slots; _bucketCount = spec.OutputBuckets; _featureCount = layout.FeatureCount;
+        if (backend is { } requested && !Enum.IsDefined(requested))
+            throw new ArgumentOutOfRangeException(nameof(backend), $"Unknown backend {(int)requested}.");
+        if (!Enum.IsDefined(sparseInput))
+            throw new ArgumentOutOfRangeException(nameof(sparseInput), $"Unknown sparse input mode {(int)sparseInput}.");
+        SimdBackend b = backend ?? SimdSupport.Best;
+        if (!SimdSupport.IsSupported(b))
+            throw new PlatformNotSupportedException($"{b} is not supported on this CPU.");
+        Model = model;
+        Backend = b;
+        SparseInput = sparseInput;
+        _modelMemory = model.Memory;
+        NetworkSpec spec = model.Spec;
+        NetworkLayout layout = model.Layout;
+        _accumulatorSize = layout.AccumulatorSize;
+        _slotCount = layout.Slots;
+        _bucketCount = spec.OutputBuckets;
+        _featureCount = layout.FeatureCount;
         _context = new EvaluationContext
         {
-            Model = model, FeatureWeights = model.FeatureWeightsPointer, FeatureBias = model.FeatureBiasPointer,
-            AccumulatorSize = _accumulatorSize, SlotCount = _slotCount, FeatureCount = _featureCount, TransformerOutputSize = layout.FeatureTransformerOutputSize, ChunkCount = layout.ChunkCount, TotalActivationSize = layout.TotalActivationSize,
-            MaxPaddedOutputLength = layout.MaxPaddedOutputLength, LayerCount = layout.DenseLayers.Count, BucketCount = _bucketCount, ClipMax = spec.ActivationQuantization,
-            IsInt8 = spec.Precision == NetworkPrecision.Int8, UsesSqrHidden = spec.HiddenActivation == HiddenActivation.SqrClippedReLU, HasSkipConnection = spec.SkipConnection,
-            Activation = spec.Activation, Steps = model.Steps, OutputWeights = model.OutputWeightsPointer, OutputBiases = model.OutputBiasPointer,
-            OutputWeightsStride = (int)(layout.OutputWeightsBucketStride / sizeof(short)), SparseMode = sparseInput,
-            Scale = spec.Precision == NetworkPrecision.Int8 ? (double)spec.OutputScale / ((double)NetworkSpec.Int8One * NetworkSpec.Int8WeightScale)
-                  : spec.Activation == FeatureTransformerActivation.SquaredClippedReLU ? (double)spec.OutputScale / ((double)spec.ActivationQuantization * spec.ActivationQuantization * spec.OutputWeightQuantization)
-                  : (double)spec.OutputScale / ((double)spec.ActivationQuantization * spec.OutputWeightQuantization),
+            Model = model,
+            FeatureWeights = model.FeatureWeightsPointer,
+            FeatureBias = model.FeatureBiasPointer,
+            AccumulatorSize = _accumulatorSize,
+            SlotCount = _slotCount,
+            FeatureCount = _featureCount,
+            TransformerOutputSize = layout.FeatureTransformerOutputSize,
+            ChunkCount = layout.ChunkCount,
+            TotalActivationSize = layout.TotalActivationSize,
+            MaxPaddedOutputLength = layout.MaxPaddedOutputLength,
+            LayerCount = layout.DenseLayers.Count,
+            BucketCount = _bucketCount,
+            ClipMax = spec.ActivationQuantization,
+            IsInt8 = spec.Precision == NetworkPrecision.Int8,
+            UsesSqrHidden = spec.HiddenActivation == HiddenActivation.SqrClippedReLU,
+            HasSkipConnection = spec.SkipConnection,
+            Activation = spec.Activation,
+            Steps = model.Steps,
+            OutputWeights = model.OutputWeightsPointer,
+            OutputBiases = model.OutputBiasPointer,
+            OutputWeightsStride = (int)(layout.OutputWeightsBucketStride / sizeof(short)),
+            SparseMode = sparseInput,
+            Scale = spec.Precision == NetworkPrecision.Int8 ? spec.OutputScale / ((double)NetworkSpec.Int8One * NetworkSpec.Int8WeightScale)
+                  : spec.Activation == FeatureTransformerActivation.SquaredClippedReLU ? spec.OutputScale / ((double)spec.ActivationQuantization * spec.ActivationQuantization * spec.OutputWeightQuantization)
+                  : spec.OutputScale / ((double)spec.ActivationQuantization * spec.OutputWeightQuantization),
         };
         _functions = FnTable.For(b);
     }
@@ -85,17 +111,23 @@ public sealed unsafe class NnueEvaluator
     [DoesNotReturn, MethodImpl(MethodImplOptions.NoInlining)]
     private void FailEval(int slots, int bucket, ReadOnlySpan<Accumulator> given)
     {
-        if (slots != _slotCount) Fail($"The model consumes {_slotCount} accumulator(s) per evaluation, got {slots}.");
-        foreach (var a in given) if (ModelGone || Bad(a)) CheckAccSlow(a);
+        if (slots != _slotCount)
+            Fail($"The model consumes {_slotCount} accumulator(s) per evaluation, got {slots}.");
+        foreach (Accumulator a in given)
+            if (ModelGone || Bad(a))
+                CheckAccSlow(a);
         FailRange(nameof(bucket), $"Bucket {bucket} out of range [0, {_bucketCount}).");
     }
 
     [DoesNotReturn, MethodImpl(MethodImplOptions.NoInlining)]
     private void CheckAccSlow(Accumulator accumulator)
     {
-        if (_modelMemory.IsDisposed) throw new ObjectDisposedException(nameof(NnueModel), "The model of this evaluator was disposed.");
-        if (accumulator.Owner is { IsDisposed: true }) throw new ObjectDisposedException(nameof(AccumulatorBuffer), "The buffer of this accumulator was disposed.");
-        if (accumulator.IsEmpty) Fail("Default (uninitialised) accumulator.");
+        if (_modelMemory.IsDisposed)
+            throw new ObjectDisposedException(nameof(NnueModel), "The model of this evaluator was disposed.");
+        if (accumulator.Owner is { IsDisposed: true })
+            throw new ObjectDisposedException(nameof(AccumulatorBuffer), "The buffer of this accumulator was disposed.");
+        if (accumulator.IsEmpty)
+            Fail("Default (uninitialised) accumulator.");
         Fail($"Accumulator size {accumulator.Length} does not match the model ({_accumulatorSize}).");
     }
 
@@ -121,7 +153,9 @@ public sealed unsafe class NnueEvaluator
 
     private void CheckFeatures(ReadOnlySpan<int> features)
     {
-        foreach (int f in features) if ((uint)f >= (uint)_featureCount) FailRange(nameof(features), $"Feature index {f} out of range [0, {_featureCount}).");
+        foreach (int f in features)
+            if ((uint)f >= (uint)_featureCount)
+                FailRange(nameof(features), $"Feature index {f} out of range [0, {_featureCount}).");
     }
 
     // ================================================================== feature transformer
@@ -144,26 +178,36 @@ public sealed unsafe class NnueEvaluator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void UpdateAccumulator(Accumulator source, Accumulator destination, ReadOnlySpan<int> removed, ReadOnlySpan<int> added)
     {
-        if (ModelGone | Bad(source) | Bad(destination)) CheckAccSlow(ModelGone || Bad(source) ? source : destination);
-        CheckFeatures(removed); CheckFeatures(added);
+        if (ModelGone | Bad(source) | Bad(destination))
+            CheckAccSlow(ModelGone || Bad(source) ? source : destination);
+        CheckFeatures(removed);
+        CheckFeatures(added);
         _functions.UpdateAccumulator(_context, source.Pointer, destination.Pointer, removed, added);
-        GC.KeepAlive(_context); GC.KeepAlive(source.Owner); GC.KeepAlive(destination.Owner);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(source.Owner);
+        GC.KeepAlive(destination.Owner);
     }
     /// <summary><see cref="UpdateAccumulator"/> without argument checks: feature indices are not validated.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void UpdateAccumulatorUnchecked(Accumulator source, Accumulator destination, ReadOnlySpan<int> removed, ReadOnlySpan<int> added)
     {
         _functions.UpdateAccumulator(_context, source.Pointer, destination.Pointer, removed, added);
-        GC.KeepAlive(_context); GC.KeepAlive(source.Owner); GC.KeepAlive(destination.Owner);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(source.Owner);
+        GC.KeepAlive(destination.Owner);
     }
 
     /// <summary>Adds the weights of one feature to the accumulator (the feature became active).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void AddFeature(Accumulator accumulator, int feature)
     {
-        if (ModelGone | Bad(accumulator)) CheckAccSlow(accumulator);
-        if ((uint)feature >= (uint)_featureCount) FailRange(nameof(feature), $"Feature index {feature} out of range [0, {_featureCount}).");
-        _functions.AddFeature(_context, accumulator.Pointer, feature); GC.KeepAlive(_context); GC.KeepAlive(accumulator.Owner);
+        if (ModelGone | Bad(accumulator))
+            CheckAccSlow(accumulator);
+        if ((uint)feature >= (uint)_featureCount)
+            FailRange(nameof(feature), $"Feature index {feature} out of range [0, {_featureCount}).");
+        _functions.AddFeature(_context, accumulator.Pointer, feature);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(accumulator.Owner);
     }
     /// <summary><see cref="AddFeature"/> without argument checks.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -173,9 +217,13 @@ public sealed unsafe class NnueEvaluator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RemoveFeature(Accumulator accumulator, int feature)
     {
-        if (ModelGone | Bad(accumulator)) CheckAccSlow(accumulator);
-        if ((uint)feature >= (uint)_featureCount) FailRange(nameof(feature), $"Feature index {feature} out of range [0, {_featureCount}).");
-        _functions.RemoveFeature(_context, accumulator.Pointer, feature); GC.KeepAlive(_context); GC.KeepAlive(accumulator.Owner);
+        if (ModelGone | Bad(accumulator))
+            CheckAccSlow(accumulator);
+        if ((uint)feature >= (uint)_featureCount)
+            FailRange(nameof(feature), $"Feature index {feature} out of range [0, {_featureCount}).");
+        _functions.RemoveFeature(_context, accumulator.Pointer, feature);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(accumulator.Owner);
     }
     /// <summary><see cref="RemoveFeature"/> without argument checks.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -198,9 +246,11 @@ public sealed unsafe class NnueEvaluator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int Evaluate(Accumulator first, int bucket = 0)
     {
-        if (_slotCount != 1 | ModelGone | Bad(first) | (uint)bucket >= (uint)_bucketCount) FailEval(1, bucket, new[] { first });
+        if (_slotCount != 1 | ModelGone | Bad(first) | (uint)bucket >= (uint)_bucketCount)
+            FailEval(1, bucket, new[] { first });
         int score = EvaluateSingleSlot(first.Pointer, bucket);
-        GC.KeepAlive(_context); GC.KeepAlive(first.Owner);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(first.Owner);
         return score;
     }
     /// <summary><see cref="Evaluate(Accumulator, int)"/> without argument checks.</summary>
@@ -208,7 +258,8 @@ public sealed unsafe class NnueEvaluator
     public int EvaluateUnchecked(Accumulator first, int bucket = 0)
     {
         int score = EvaluateSingleSlot(first.Pointer, bucket);
-        GC.KeepAlive(_context); GC.KeepAlive(first.Owner);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(first.Owner);
         return score;
     }
 
@@ -216,9 +267,12 @@ public sealed unsafe class NnueEvaluator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int Evaluate(Accumulator first, Accumulator second, int bucket = 0)
     {
-        if (_slotCount != 2 | ModelGone | Bad(first) | Bad(second) | (uint)bucket >= (uint)_bucketCount) FailEval(2, bucket, new[] { first, second });
+        if (_slotCount != 2 | ModelGone | Bad(first) | Bad(second) | (uint)bucket >= (uint)_bucketCount)
+            FailEval(2, bucket, new[] { first, second });
         int score = EvaluatePair(first.Pointer, second.Pointer, bucket);
-        GC.KeepAlive(_context); GC.KeepAlive(first.Owner); GC.KeepAlive(second.Owner);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(first.Owner);
+        GC.KeepAlive(second.Owner);
         return score;
     }
     /// <summary><see cref="Evaluate(Accumulator, Accumulator, int)"/> without argument checks.</summary>
@@ -226,7 +280,9 @@ public sealed unsafe class NnueEvaluator
     public int EvaluateUnchecked(Accumulator first, Accumulator second, int bucket = 0)
     {
         int score = EvaluatePair(first.Pointer, second.Pointer, bucket);
-        GC.KeepAlive(_context); GC.KeepAlive(first.Owner); GC.KeepAlive(second.Owner);
+        GC.KeepAlive(_context);
+        GC.KeepAlive(first.Owner);
+        GC.KeepAlive(second.Owner);
         return score;
     }
 
@@ -234,7 +290,8 @@ public sealed unsafe class NnueEvaluator
     public int Evaluate(ReadOnlySpan<Accumulator> slots, int bucket = 0)
     {
         CheckSlotCount(slots.Length);
-        foreach (var a in slots) CheckAcc(a);
+        foreach (Accumulator a in slots)
+            CheckAcc(a);
         CheckBucket(bucket);
         return EvaluateUnchecked(slots, bucket);
     }
@@ -245,7 +302,8 @@ public sealed unsafe class NnueEvaluator
     internal int EvaluateRaw(ReadOnlySpan<Accumulator> slots, int bucket = 0)
     {
         CheckSlotCount(slots.Length);
-        foreach (var a in slots) CheckAcc(a);
+        foreach (Accumulator a in slots)
+            CheckAcc(a);
         CheckBucket(bucket);
         return EvaluateRawUnchecked(slots, bucket);
     }
@@ -254,9 +312,11 @@ public sealed unsafe class NnueEvaluator
     internal int EvaluateRawUnchecked(ReadOnlySpan<Accumulator> slots, int bucket = 0)
     {
         short** p = stackalloc short*[slots.Length];
-        for (int i = 0; i < slots.Length; i++) p[i] = slots[i].Pointer;
+        for (int i = 0; i < slots.Length; i++)
+            p[i] = slots[i].Pointer;
         int raw = _functions.Evaluate(_context, p, bucket);
-        for (int i = 0; i < slots.Length; i++) GC.KeepAlive(slots[i].Owner);
+        for (int i = 0; i < slots.Length; i++)
+            GC.KeepAlive(slots[i].Owner);
         GC.KeepAlive(_context);
         return raw;
     }
@@ -266,9 +326,10 @@ public sealed unsafe class NnueEvaluator
     public int EvaluateFeatures(IReadOnlyList<int[]> featuresPerSlot, int bucket = 0)
     {
         CheckSlotCount(featuresPerSlot.Count);
-        using var buffer = Model.CreateAccumulators(_slotCount);
-        var slots = new Accumulator[_slotCount];
-        for (int i = 0; i < _slotCount; i++) { slots[i] = buffer[i]; RefreshAccumulator(slots[i], featuresPerSlot[i]); }
+        using AccumulatorBuffer buffer = Model.CreateAccumulators(_slotCount);
+        Accumulator[] slots = new Accumulator[_slotCount];
+        for (int i = 0; i < _slotCount; i++)
+        { slots[i] = buffer[i]; RefreshAccumulator(slots[i], featuresPerSlot[i]); }
         return Evaluate(slots, bucket);
     }
 
@@ -276,10 +337,12 @@ public sealed unsafe class NnueEvaluator
     /// The sparse kernel does work proportional to this number.</summary>
     public double GetNonZeroInputFraction(ReadOnlySpan<Accumulator> slots)
     {
-        if (!_context.IsInt8) throw new InvalidOperationException("Int8 models only.");
+        if (!_context.IsInt8)
+            throw new InvalidOperationException("Int8 models only.");
         CheckSlotCount(slots.Length);
-        foreach (var a in slots) CheckAcc(a);
-        var ft = new byte[_context.TransformerOutputSize];
+        foreach (Accumulator a in slots)
+            CheckAcc(a);
+        byte[] ft = new byte[_context.TransformerOutputSize];
         int h = _accumulatorSize, half = h >> 1;
         fixed (byte* f = ft)
         {
@@ -288,15 +351,24 @@ public sealed unsafe class NnueEvaluator
                 short* accumulator = slots[s].Pointer;
                 switch (_context.Activation)
                 {
-                    case FeatureTransformerActivation.ClippedReLU: ScalarKernels.ApplyCReLU(accumulator, f + s * h, h); break;
-                    case FeatureTransformerActivation.SquaredClippedReLU: ScalarKernels.ApplySCReLU(accumulator, f + s * h, h); break;
-                    default: ScalarKernels.ApplyPairwise(accumulator, f + s * half, half); break;
+                    case FeatureTransformerActivation.ClippedReLU:
+                        ScalarKernels.ApplyCReLU(accumulator, f + (s * h), h);
+                        break;
+                    case FeatureTransformerActivation.SquaredClippedReLU:
+                        ScalarKernels.ApplySCReLU(accumulator, f + (s * h), h);
+                        break;
+                    default:
+                        ScalarKernels.ApplyPairwise(accumulator, f + (s * half), half);
+                        break;
                 }
             }
         }
         int nonZero = 0;
-        for (int i = 0; i < ft.Length; i += 4) if ((ft[i] | ft[i + 1] | ft[i + 2] | ft[i + 3]) != 0) nonZero++;
-        foreach (var a in slots) GC.KeepAlive(a.Owner);
+        for (int i = 0; i < ft.Length; i += 4)
+            if ((ft[i] | ft[i + 1] | ft[i + 2] | ft[i + 3]) != 0)
+                nonZero++;
+        foreach (Accumulator a in slots)
+            GC.KeepAlive(a.Owner);
         return nonZero / (double)(ft.Length / 4);
     }
 }

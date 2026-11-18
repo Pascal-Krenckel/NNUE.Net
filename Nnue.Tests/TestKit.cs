@@ -1,7 +1,6 @@
 using Nnue.Configuration;
 using Nnue.Evaluation;
 using Nnue.Models;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Nnue.Tests;
 
@@ -11,7 +10,8 @@ internal static class ExceptionAssert
 {
     public static void Throws<TException>(Action action, string message) where TException : Exception
     {
-        try { action(); }
+        try
+        { action(); }
         catch (TException) { return; }
         catch (Exception e) { Assert.Fail($"{message}: expected {typeof(TException).Name}, got {e.GetType().Name}: {e.Message}"); }
         Assert.Fail($"{message}: no exception was thrown (expected {typeof(TException).Name})");
@@ -23,22 +23,29 @@ internal static class RandomModel
 {
     public static NnueModel Make(NetworkSpec spec, Random r)
     {
-        var b = new NnueModelBuilder(spec);
-        foreach (ref short w in b.FeatureWeights) w = (short)r.Next(-80, 80);
-        foreach (ref short w in b.FeatureBiases) w = (short)r.Next(-40, 40);
+        NnueModelBuilder b = new(spec);
+        foreach (ref short w in b.FeatureWeights)
+            w = (short)r.Next(-80, 80);
+        foreach (ref short w in b.FeatureBiases)
+            w = (short)r.Next(-40, 40);
         if (spec.Precision == NetworkPrecision.Int16)
         {
             int limit = spec.Activation == FeatureTransformerActivation.SquaredClippedReLU ? 32767 / spec.ActivationQuantization : 3000;     // SCReLU: c*w must fit int16
-            for (int k = 0; k < spec.OutputBuckets; k++) foreach (ref short w in b.GetOutputWeights(k)) w = (short)r.Next(-limit, limit + 1);
-            foreach (ref int x in b.OutputBiases) x = r.Next(-1_000_000, 1_000_000);
+            for (int k = 0; k < spec.OutputBuckets; k++)
+                foreach (ref short w in b.GetOutputWeights(k))
+                    w = (short)r.Next(-limit, limit + 1);
+            foreach (ref int x in b.OutputBiases)
+                x = r.Next(-1_000_000, 1_000_000);
         }
         else
         {
             for (int k = 0; k < spec.OutputBuckets; k++)
                 for (int l = 0; l < spec.DenseLayerCount; l++)
                 {
-                    foreach (ref sbyte w in b.GetDenseWeights(k, l)) w = (sbyte)r.Next(-127, 128);
-                    foreach (ref int x in b.GetDenseBiases(k, l)) x = r.Next(-2_000_000, 2_000_000);
+                    foreach (ref sbyte w in b.GetDenseWeights(k, l))
+                        w = (sbyte)r.Next(-127, 128);
+                    foreach (ref int x in b.GetDenseBiases(k, l))
+                        x = r.Next(-2_000_000, 2_000_000);
                 }
         }
         return b.Build();
@@ -48,7 +55,7 @@ internal static class RandomModel
     /// pattern 0: everything clamped to zero, 1: everything non-zero, else mixed.</summary>
     public static void Fill(Accumulator acc, Random r, int pattern)
     {
-        var v = acc.AsSpan();
+        Span<short> v = acc.AsSpan();
         for (int i = 0; i < v.Length; i++)
             v[i] = pattern == 0 ? (short)r.Next(-300, 0) : pattern == 1 ? (short)r.Next(1, 700) : (short)r.Next(-300, 700);
     }

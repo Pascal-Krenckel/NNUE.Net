@@ -13,12 +13,15 @@ internal static unsafe class NnzTable
 
     private static uint* Build()
     {
-        var p = (uint*)NativeMemory.AlignedAlloc(256 * 8 * sizeof(uint), 64);
+        uint* p = (uint*)NativeMemory.AlignedAlloc(256 * 8 * sizeof(uint), 64);
         for (int m = 0; m < 256; m++)
         {
             int k = 0;
-            for (int b = 0; b < 8; b++) if ((m >> b & 1) != 0) p[m * 8 + k++] = (uint)b;
-            for (; k < 8; k++) p[m * 8 + k] = 0;
+            for (int b = 0; b < 8; b++)
+                if (((m >> b) & 1) != 0)
+                    p[(m * 8) + k++] = (uint)b;
+            for (; k < 8; k++)
+                p[(m * 8) + k] = 0;
         }
         return p;
     }

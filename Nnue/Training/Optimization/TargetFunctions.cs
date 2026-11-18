@@ -7,5 +7,5 @@ public static class TargetFunctions
 
     /// <summary>Interpolation of a score target and a result in [0, 1] (win probability): lambda * sigmoid(score/outputScale) + (1 - lambda) * result.</summary>
     public static float Blend(float score, float outputScale, float result, float scoreWeight)
-        => scoreWeight * ScoreToTarget(score, outputScale) + (1f - scoreWeight) * result;
+        => (scoreWeight * ScoreToTarget(score, outputScale)) + ((1f - scoreWeight) * result);
 }

@@ -28,8 +28,8 @@ internal sealed class NetworkLayout
     public long BlobSize { get; }
     private readonly long[] _denseWeights, _denseBias;   // [bucket * layers + layer]
 
-    public long GetDenseWeightsOffset(int bucket, int layer) => _denseWeights[bucket * DenseLayers.Count + layer];
-    public long GetDenseBiasOffset(int bucket, int layer) => _denseBias[bucket * DenseLayers.Count + layer];
+    public long GetDenseWeightsOffset(int bucket, int layer) => _denseWeights[(bucket * DenseLayers.Count) + layer];
+    public long GetDenseBiasOffset(int bucket, int layer) => _denseBias[(bucket * DenseLayers.Count) + layer];
 
     /// <summary>
     /// Index of weight (input i, output o) of a dense layer. Hidden layers use a blocked layout: 4 inputs per output are contiguous, and
@@ -37,15 +37,9 @@ internal sealed class NetworkLayout
     /// The LAST layer has a single output and is stored as a plain contiguous vector of its <c>In</c> weights (o must be 0): the kernel is a
     /// dot product, not a matrix product. The bytes after the weights (up to the next multiple of 64) are zero.
     /// </summary>
-    public int GetDenseWeightIndex(int layer, int i, int o)
-    {
-        if (layer == DenseLayers.Count - 1)
-        {
-            if (o != 0) throw new ArgumentOutOfRangeException(nameof(o), "The last layer has one output.");
-            return i;
-        }
-        return (i >> 2) * DenseLayers[layer].PaddedOutputLength * 4 + o * 4 + (i & 3);
-    }
+    public int GetDenseWeightIndex(int layer, int i, int o) => layer == DenseLayers.Count - 1
+            ? o != 0 ? throw new ArgumentOutOfRangeException(nameof(o), "The last layer has one output.") : i
+            : ((i >> 2) * DenseLayers[layer].PaddedOutputLength * 4) + (o * 4) + (i & 3);
 
     /// <summary>Number of weight bytes the caller writes for a dense layer (the last layer: In, the others: In * PaddedOut).</summary>
     public int GetDenseWeightCount(int layer) => layer == DenseLayers.Count - 1 ? DenseLayers[layer].InputLength : DenseLayers[layer].InputLength * DenseLayers[layer].PaddedOutputLength;
@@ -55,49 +49,61 @@ internal sealed class NetworkLayout
     private NetworkLayout(NetworkSpec spec)
     {
         Spec = spec;
-        FeatureCount = spec.FeatureCount; AccumulatorSize = spec.AccumulatorSize; Slots = spec.Slots;
+        FeatureCount = spec.FeatureCount;
+        AccumulatorSize = spec.AccumulatorSize;
+        Slots = spec.Slots;
         SlotOutputSize = spec.Activation == FeatureTransformerActivation.Pairwise ? AccumulatorSize / 2 : AccumulatorSize;
         FeatureTransformerOutputSize = Slots * SlotOutputSize;
 
         int mult = spec.HiddenActivation == HiddenActivation.SqrClippedReLU ? 2 : 1;
         int hidden = spec.HiddenLayerSizes.Length;
-        var actSizes = spec.HiddenLayerSizes.Select(n => n * mult).ToArray();
-        var actOffsets = new int[hidden];
+        int[] actSizes = spec.HiddenLayerSizes.Select(n => n * mult).ToArray();
+        int[] actOffsets = new int[hidden];
         int total = 0;
-        for (int i = 0; i < hidden; i++) { actOffsets[i] = total; total += actSizes[i]; }
+        for (int i = 0; i < hidden; i++)
+        { actOffsets[i] = total; total += actSizes[i]; }
         TotalActivationSize = total;
 
-        var dense = new DenseLayerInfo[hidden + 1];
+        DenseLayerInfo[] dense = new DenseLayerInfo[hidden + 1];
         for (int k = 0; k <= hidden; k++)
         {
             int outDim = k < hidden ? spec.HiddenLayerSizes[k] : 1;
             int inDim, inOff = 0;
-            if (k == 0) inDim = FeatureTransformerOutputSize;
-            else if (spec.DenseConnections) { inDim = actOffsets[k - 1] + actSizes[k - 1]; inOff = 0; }
-            else { inDim = actSizes[k - 1]; inOff = actOffsets[k - 1]; }
+            if (k == 0)
+                inDim = FeatureTransformerOutputSize;
+            else if (spec.DenseConnections)
+            { inDim = actOffsets[k - 1] + actSizes[k - 1]; inOff = 0; }
+            else
+            { inDim = actSizes[k - 1]; inOff = actOffsets[k - 1]; }
             dense[k] = new DenseLayerInfo(inDim, outDim, NetworkSpec.GetPaddedOutputLength(outDim), inOff, k < hidden ? actOffsets[k] : 0);
         }
         DenseLayers = dense;
         MaxPaddedOutputLength = dense.Max(d => d.PaddedOutputLength);
 
         long pos = 0;
-        FeatureWeightsOffset = pos; pos = Align(pos + (long)FeatureCount * AccumulatorSize * sizeof(short));
-        FeatureBiasOffset = pos; pos = Align(pos + (long)AccumulatorSize * sizeof(short));
+        FeatureWeightsOffset = pos;
+        pos = Align(pos + ((long)FeatureCount * AccumulatorSize * sizeof(short)));
+        FeatureBiasOffset = pos;
+        pos = Align(pos + ((long)AccumulatorSize * sizeof(short)));
         _denseWeights = new long[spec.OutputBuckets * dense.Length];
         _denseBias = new long[spec.OutputBuckets * dense.Length];
         if (spec.Precision == NetworkPrecision.Int16)
         {
-            OutputWeightsOffset = pos; OutputWeightsBucketStride = Align((long)FeatureTransformerOutputSize * sizeof(short));
+            OutputWeightsOffset = pos;
+            OutputWeightsBucketStride = Align((long)FeatureTransformerOutputSize * sizeof(short));
             pos += spec.OutputBuckets * OutputWeightsBucketStride;
-            OutputBiasOffset = pos; pos = Align(pos + (long)spec.OutputBuckets * sizeof(int));
+            OutputBiasOffset = pos;
+            pos = Align(pos + ((long)spec.OutputBuckets * sizeof(int)));
         }
         else
         {
             for (int b = 0; b < spec.OutputBuckets; b++)
                 for (int k = 0; k < dense.Length; k++)
                 {
-                    _denseWeights[b * dense.Length + k] = pos; pos = Align(pos + (k == dense.Length - 1 ? dense[k].InputLength : (long)dense[k].InputLength * dense[k].PaddedOutputLength));
-                    _denseBias[b * dense.Length + k] = pos; pos = Align(pos + (long)dense[k].PaddedOutputLength * sizeof(int));
+                    _denseWeights[(b * dense.Length) + k] = pos;
+                    pos = Align(pos + (k == dense.Length - 1 ? dense[k].InputLength : (long)dense[k].InputLength * dense[k].PaddedOutputLength));
+                    _denseBias[(b * dense.Length) + k] = pos;
+                    pos = Align(pos + ((long)dense[k].PaddedOutputLength * sizeof(int)));
                 }
         }
         BlobSize = pos;

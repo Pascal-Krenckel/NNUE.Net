@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Nnue.Backends;
 
 namespace Nnue.Evaluation;
@@ -13,8 +12,11 @@ internal unsafe struct FnTable
 
     private static FnTable Make<TB>() where TB : struct, IBackend => new()
     {
-        RefreshAccumulator = &Core<TB>.RefreshAccumulator, UpdateAccumulator = &Core<TB>.UpdateAccumulator,
-        AddFeature = &Core<TB>.AddFeature, RemoveFeature = &Core<TB>.RemoveFeature, Evaluate = &Core<TB>.Evaluate,
+        RefreshAccumulator = &Core<TB>.RefreshAccumulator,
+        UpdateAccumulator = &Core<TB>.UpdateAccumulator,
+        AddFeature = &Core<TB>.AddFeature,
+        RemoveFeature = &Core<TB>.RemoveFeature,
+        Evaluate = &Core<TB>.Evaluate,
     };
 
     /// <summary>The only place that lists all backends.</summary>

@@ -1,6 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-
 namespace Nnue.Models;
 /// <summary>Resolved pointers and dimensions of one dense layer of one bucket (built once per model).</summary>
 internal unsafe struct Step

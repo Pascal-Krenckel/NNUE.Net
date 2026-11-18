@@ -1,7 +1,6 @@
 using Nnue.Configuration;
 using Nnue.Evaluation;
 using Nnue.Models;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Nnue.Tests;
 
@@ -20,7 +19,9 @@ public sealed class LoadingTests
         public override int Read(Span<byte> buffer)
         {
             int n = Math.Min(Math.Min(buffer.Length, step), data.Length - _position);
-            data.AsSpan(_position, n).CopyTo(buffer); _position += n; return n;
+            data.AsSpan(_position, n).CopyTo(buffer);
+            _position += n;
+            return n;
         }
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
@@ -29,26 +30,27 @@ public sealed class LoadingTests
 
     private static int Evaluate(NnueModel model, int[][] features, int bucket)
     {
-        var evaluator = new NnueEvaluator(model);
-        using var buffer = model.CreateAccumulators(model.Spec.Slots);
-        var slots = new Accumulator[model.Spec.Slots];
-        for (int i = 0; i < slots.Length; i++) { slots[i] = buffer[i]; evaluator.RefreshAccumulator(slots[i], features[i]); }
+        NnueEvaluator evaluator = new(model);
+        using AccumulatorBuffer buffer = model.CreateAccumulators(model.Spec.Slots);
+        Accumulator[] slots = new Accumulator[model.Spec.Slots];
+        for (int i = 0; i < slots.Length; i++)
+        { slots[i] = buffer[i]; evaluator.RefreshAccumulator(slots[i], features[i]); }
         return evaluator.Evaluate(slots, bucket);
     }
 
     [TestMethod]
     public void Model_LoadsFromMemoryStreamsAsyncAndMemoryMap()
     {
-        var random = new Random(11);
+        Random random = new(11);
         string path = Path.Combine(Path.GetTempPath(), $"nnue-test-{Guid.NewGuid():N}.nnue");
         try
         {
-            foreach (var (name, spec) in CoreTests.Specs().Where((_, i) => i % 4 == 1))
+            foreach ((string? name, NetworkSpec? spec) in CoreTests.Specs().Where((_, i) => i % 4 == 1))
             {
-                var model = RandomModel.Make(spec, random);
+                NnueModel model = RandomModel.Make(spec, random);
                 model.Save(path);
                 byte[] bytes = File.ReadAllBytes(path);
-                var features = Enumerable.Range(0, spec.Slots).Select(_ => Enumerable.Range(0, 10).Select(_ => random.Next(spec.FeatureCount)).Distinct().ToArray()).ToArray();
+                int[][] features = Enumerable.Range(0, spec.Slots).Select(_ => Enumerable.Range(0, 10).Select(_ => random.Next(spec.FeatureCount)).Distinct().ToArray()).ToArray();
                 int bucket = random.Next(spec.OutputBuckets);
                 int expected = Evaluate(model, features, bucket);
 
@@ -57,13 +59,13 @@ public sealed class LoadingTests
                 Assert.IsTrue(Evaluate(NnueModel.LoadAsync(path).GetAwaiter().GetResult(), features, bucket) == expected, $"{name}: async load from a file");
                 Assert.IsTrue(Evaluate(NnueModel.LoadAsync(new TrickleStream(bytes, 1000)).GetAwaiter().GetResult(), features, bucket) == expected, $"{name}: async load from a trickling stream");
 
-                using var mapped = NnueModel.LoadMemoryMapped(path);
+                using NnueModel mapped = NnueModel.LoadMemoryMapped(path);
                 Assert.IsTrue(Evaluate(mapped, features, bucket) == expected, $"{name}: memory-mapped model evaluates identically");
                 Assert.IsTrue(mapped.FeatureWeights.SequenceEqual(model.FeatureWeights) && mapped.FtWeightsPtrValue() % 64 == 0, $"{name}: mapped weights identical and 64-byte aligned");
             }
 
             // corrupt / truncated input on every path
-            var small = RandomModel.Make(new NetworkSpec { FeatureCount = 10, AccumulatorSize = 32 }, random);
+            NnueModel small = RandomModel.Make(new NetworkSpec { FeatureCount = 10, AccumulatorSize = 32 }, random);
             small.Save(path);
             byte[] good = File.ReadAllBytes(path);
             byte[] truncated = good[..^100];
@@ -71,15 +73,16 @@ public sealed class LoadingTests
             ExceptionAssert.Throws<InvalidDataException>(() => NnueModel.Load(new byte[40]), "memory: garbage");
             ExceptionAssert.Throws<InvalidDataException>(() => NnueModel.LoadAsync(new MemoryStream(truncated)).GetAwaiter().GetResult(), "async: truncated");
             File.WriteAllBytes(path, truncated);
-            ExceptionAssert.Throws<InvalidDataException>(() => { using var unexpected = NnueModel.LoadMemoryMapped(path); }, "mapped: truncated");
+            ExceptionAssert.Throws<InvalidDataException>(() => { using NnueModel unexpected = NnueModel.LoadMemoryMapped(path); }, "mapped: truncated");
             File.WriteAllBytes(path, new byte[1000]);
-            ExceptionAssert.Throws<InvalidDataException>(() => { using var unexpected = NnueModel.LoadMemoryMapped(path); }, "mapped: garbage");
-            var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+            ExceptionAssert.Throws<InvalidDataException>(() => { using NnueModel unexpected = NnueModel.LoadMemoryMapped(path); }, "mapped: garbage");
+            CancellationTokenSource cancelled = new();
+            cancelled.Cancel();
             ExceptionAssert.Throws<OperationCanceledException>(() => NnueModel.LoadAsync(new MemoryStream(good), cancelled.Token).GetAwaiter().GetResult(), "async: cancelled token");
 
             // disposing a mapped model releases the mapping and invalidates the model like any other
             File.WriteAllBytes(path, good);
-            var mappedModel = NnueModel.LoadMemoryMapped(path);
+            NnueModel mappedModel = NnueModel.LoadMemoryMapped(path);
             mappedModel.Dispose();
             Assert.IsTrue(mappedModel.IsDisposed, "mapped model: IsDisposed");
             ExceptionAssert.Throws<ObjectDisposedException>(() => mappedModel.CreateAccumulators(1), "mapped model: disposed refuses accumulators");
@@ -92,16 +95,16 @@ public sealed class LoadingTests
     [TestMethod]
     public void Load_LeavesASeekableStreamRightAfterTheModel()
     {
-        var tiny = RandomModel.Make(new NetworkSpec { FeatureCount = 1, AccumulatorSize = 32 }, new Random(4));     // smaller than the header probe
-        using var stream = new MemoryStream();
+        NnueModel tiny = RandomModel.Make(new NetworkSpec { FeatureCount = 1, AccumulatorSize = 32 }, new Random(4));     // smaller than the header probe
+        using MemoryStream stream = new();
         tiny.Save(stream);
         long end = stream.Position;
         stream.Write([1, 2, 3, 4, 5, 6, 7, 8]);                    // whatever follows the model in the stream
         stream.Position = 0;
-        using var loaded = NnueModel.Load(stream);
+        using NnueModel loaded = NnueModel.Load(stream);
         Assert.IsTrue(stream.Position == end, $"position {stream.Position}, model ends at {end}");
         stream.Position = 0;
-        using var loadedAsync = NnueModel.LoadAsync(stream).GetAwaiter().GetResult();
+        using NnueModel loadedAsync = NnueModel.LoadAsync(stream).GetAwaiter().GetResult();
         Assert.IsTrue(stream.Position == end, "async: position right after the model");
         Assert.IsTrue(loaded.FeatureWeights.SequenceEqual(tiny.FeatureWeights), "weights");
     }
@@ -109,13 +112,13 @@ public sealed class LoadingTests
     [TestMethod]
     public void Presets_AndBuilder_ProduceValidSpecs()
     {
-        var simple = NetworkSpec.CreateSimple(768, 128);
+        NetworkSpec simple = NetworkSpec.CreateSimple(768, 128);
         Assert.IsTrue(simple.Precision == NetworkPrecision.Int16 && simple.Slots == 2 && simple.OutputBuckets == 1 && simple.TryValidate(out _), "CreateSimple");
-        var screlu = NetworkSpec.CreateSimple(768, 128, slots: 1, outputBuckets: 8, FeatureTransformerActivation.SquaredClippedReLU);
+        NetworkSpec screlu = NetworkSpec.CreateSimple(768, 128, slots: 1, outputBuckets: 8, FeatureTransformerActivation.SquaredClippedReLU);
         Assert.IsTrue(screlu.Activation == FeatureTransformerActivation.SquaredClippedReLU && screlu.OutputWeightQuantization == 64 && screlu.Slots == 1, "CreateSimple with SCReLU");
-        var int8 = NetworkSpec.CreateInt8(768, 256, [16, 32], outputBuckets: 4);
+        NetworkSpec int8 = NetworkSpec.CreateInt8(768, 256, [16, 32], outputBuckets: 4);
         Assert.IsTrue(int8.Precision == NetworkPrecision.Int8 && int8.HiddenLayerSizes.SequenceEqual([16, 32]) && int8.OutputBuckets == 4, "CreateInt8");
-        var viaBuilder = NetworkSpec.CreateBuilder(500).WithAccumulatorSize(128).WithSlots(2).WithInt8(FeatureTransformerActivation.Pairwise, [16, 32])
+        NetworkSpec viaBuilder = NetworkSpec.CreateBuilder(500).WithAccumulatorSize(128).WithSlots(2).WithInt8(FeatureTransformerActivation.Pairwise, [16, 32])
             .WithSqrClippedHiddenActivation().WithDenseConnections().WithSkipConnection().WithOutputBuckets(3).WithOutputScale(300).Build();
         Assert.IsTrue(viaBuilder.Activation == FeatureTransformerActivation.Pairwise && viaBuilder.DenseConnections && viaBuilder.SkipConnection && viaBuilder.OutputScale == 300
                 && viaBuilder.HiddenActivation == HiddenActivation.SqrClippedReLU, "builder sets every option");

@@ -1,5 +1,3 @@
-using System.Runtime.Intrinsics.Arm;
-using System.Runtime.Intrinsics.X86;
 using Nnue.Evaluation;
 
 namespace Nnue.Backends;

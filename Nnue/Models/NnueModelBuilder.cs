@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Nnue.Configuration;
 using Nnue.Memory;
 
@@ -25,7 +24,8 @@ public sealed unsafe class NnueModelBuilder
         ArgumentNullException.ThrowIfNull(spec);
         Layout = NetworkLayout.Create(spec);
         Spec = spec;
-        if (Layout.BlobSize > int.MaxValue - 64) throw new ArgumentException("Model larger than 2 GB is not supported.");
+        if (Layout.BlobSize > int.MaxValue - 64)
+            throw new ArgumentException("Model larger than 2 GB is not supported.");
         _blob = new NativeBlock(Layout.BlobSize);
         _base = _blob.Pointer;
     }
@@ -50,8 +50,9 @@ public sealed unsafe class NnueModelBuilder
     public Span<short> GetOutputWeights(int bucket)
     {
         Check();
-        if (Spec.Precision != NetworkPrecision.Int16) throw new InvalidOperationException("Int16 models only.");
-        return new((short*)(_base + Layout.OutputWeightsOffset + bucket * Layout.OutputWeightsBucketStride), Layout.FeatureTransformerOutputSize);
+        return Spec.Precision != NetworkPrecision.Int16
+            ? throw new InvalidOperationException("Int16 models only.")
+            : new((short*)(_base + Layout.OutputWeightsOffset + (bucket * Layout.OutputWeightsBucketStride)), Layout.FeatureTransformerOutputSize);
     }
 
     /// <summary>Int16: output bias of every bucket (scale ActivationQuantization * OutputWeightQuantization, or ActivationQuantization^2 * OutputWeightQuantization for SCReLU).</summary>
@@ -62,8 +63,10 @@ public sealed unsafe class NnueModelBuilder
     public Span<sbyte> GetDenseWeights(int bucket, int layer)
     {
         Check();
-        if (Spec.Precision != NetworkPrecision.Int8) throw new InvalidOperationException("Int8 models only.");
-        var d = Layout.DenseLayers[layer];
+        if (Spec.Precision != NetworkPrecision.Int8)
+            throw new InvalidOperationException("Int8 models only.");
+
+        _ = Layout.DenseLayers[layer];
         return new((sbyte*)(_base + Layout.GetDenseWeightsOffset(bucket, layer)), Layout.GetDenseWeightCount(layer));
     }
 
@@ -78,8 +81,9 @@ public sealed unsafe class NnueModelBuilder
     public Span<int> GetDenseBiases(int bucket, int layer)
     {
         Check();
-        if (Spec.Precision != NetworkPrecision.Int8) throw new InvalidOperationException("Int8 models only.");
-        return new((int*)(_base + Layout.GetDenseBiasOffset(bucket, layer)), Layout.DenseLayers[layer].PaddedOutputLength);
+        return Spec.Precision != NetworkPrecision.Int8
+            ? throw new InvalidOperationException("Int8 models only.")
+            : new((int*)(_base + Layout.GetDenseBiasOffset(bucket, layer)), Layout.DenseLayers[layer].PaddedOutputLength);
     }
 
     /// <summary>Creates the model from the filled weights (no copy). The builder cannot be used afterwards.</summary>

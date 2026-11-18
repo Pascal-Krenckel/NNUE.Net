@@ -21,14 +21,13 @@ internal static unsafe class Avx512VnniKernels
     internal readonly struct Vnni512Hardware : IVnni512Op
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector512<int> MultiplyAccumulate(Vector512<int> accumulator, Vector512<byte> unsignedValues, Vector512<sbyte> signedValues)
-        {
+        public static Vector512<int> MultiplyAccumulate(Vector512<int> accumulator, Vector512<byte> unsignedValues, Vector512<sbyte> signedValues) =>
 #if NET11_0_OR_GREATER
-            return AvxVnni.V512.MultiplyWideningAndAdd(accumulator, unsignedValues, signedValues);
+            AvxVnni.V512.MultiplyWideningAndAdd(accumulator, unsignedValues, signedValues);
 #else
             throw new PlatformNotSupportedException("AVX512-VNNI needs the net11.0 build of the library.");
 #endif
-        }
+
     }
 
     /// <summary>Software model of <c>vpdpbusd zmm</c> on AVX-512 BW. Identical results as long as the pair sums of u*s fit int16 (u &lt;= 127, |s| &lt;= 127).</summary>
@@ -53,31 +52,31 @@ internal static unsafe class Avx512VnniKernels
         int stride = paddedOutputLength * 4;                       // bytes between consecutive 4-input chunks
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector512.LoadAligned(biases + (long)o);
+            Vector512<int> a0 = Vector512.LoadAligned(biases + (long)o);
             Vector512<int> a1 = default, a2 = default, a3 = default, a4 = default, a5 = default, a6 = default, a7 = default;
-            sbyte* wp = weights + o * 4;
+            sbyte* wp = weights + (o * 4);
             int i = 0;
             for (; i + 32 <= inputLength; i += 32)
             {
-                sbyte* w = wp + (i >> 2) * stride;
+                sbyte* w = wp + ((i >> 2) * stride);
                 a0 = TOp.MultiplyAccumulate(a0, Broadcast(input, i), Vector512.LoadAligned(w));
                 a1 = TOp.MultiplyAccumulate(a1, Broadcast(input, i + 4), Vector512.LoadAligned(w + stride));
-                a2 = TOp.MultiplyAccumulate(a2, Broadcast(input, i + 8), Vector512.LoadAligned(w + 2 * stride));
-                a3 = TOp.MultiplyAccumulate(a3, Broadcast(input, i + 12), Vector512.LoadAligned(w + 3 * stride));
-                a4 = TOp.MultiplyAccumulate(a4, Broadcast(input, i + 16), Vector512.LoadAligned(w + 4 * stride));
-                a5 = TOp.MultiplyAccumulate(a5, Broadcast(input, i + 20), Vector512.LoadAligned(w + 5 * stride));
-                a6 = TOp.MultiplyAccumulate(a6, Broadcast(input, i + 24), Vector512.LoadAligned(w + 6 * stride));
-                a7 = TOp.MultiplyAccumulate(a7, Broadcast(input, i + 28), Vector512.LoadAligned(w + 7 * stride));
+                a2 = TOp.MultiplyAccumulate(a2, Broadcast(input, i + 8), Vector512.LoadAligned(w + (2 * stride)));
+                a3 = TOp.MultiplyAccumulate(a3, Broadcast(input, i + 12), Vector512.LoadAligned(w + (3 * stride)));
+                a4 = TOp.MultiplyAccumulate(a4, Broadcast(input, i + 16), Vector512.LoadAligned(w + (4 * stride)));
+                a5 = TOp.MultiplyAccumulate(a5, Broadcast(input, i + 20), Vector512.LoadAligned(w + (5 * stride)));
+                a6 = TOp.MultiplyAccumulate(a6, Broadcast(input, i + 24), Vector512.LoadAligned(w + (6 * stride)));
+                a7 = TOp.MultiplyAccumulate(a7, Broadcast(input, i + 28), Vector512.LoadAligned(w + (7 * stride)));
             }
             if (i < inputLength)                                   // 16 inputs left (inputLength % 16 == 0)
             {
-                sbyte* w = wp + (i >> 2) * stride;
+                sbyte* w = wp + ((i >> 2) * stride);
                 a0 = TOp.MultiplyAccumulate(a0, Broadcast(input, i), Vector512.LoadAligned(w));
                 a1 = TOp.MultiplyAccumulate(a1, Broadcast(input, i + 4), Vector512.LoadAligned(w + stride));
-                a2 = TOp.MultiplyAccumulate(a2, Broadcast(input, i + 8), Vector512.LoadAligned(w + 2 * stride));
-                a3 = TOp.MultiplyAccumulate(a3, Broadcast(input, i + 12), Vector512.LoadAligned(w + 3 * stride));
+                a2 = TOp.MultiplyAccumulate(a2, Broadcast(input, i + 8), Vector512.LoadAligned(w + (2 * stride)));
+                a3 = TOp.MultiplyAccumulate(a3, Broadcast(input, i + 12), Vector512.LoadAligned(w + (3 * stride)));
             }
-            (((a0 + a1) + (a2 + a3)) + ((a4 + a5) + (a6 + a7))).StoreAligned(output + (long)o);
+            (a0 + a1 + (a2 + a3) + (a4 + a5 + (a6 + a7))).StoreAligned(output + (long)o);
         }
     }
 
@@ -89,28 +88,28 @@ internal static unsafe class Avx512VnniKernels
         int stride = paddedOutputLength * 4;
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector512.LoadAligned(biases + (long)o);
+            Vector512<int> a0 = Vector512.LoadAligned(biases + (long)o);
             Vector512<int> a1 = default, a2 = default, a3 = default, a4 = default, a5 = default, a6 = default, a7 = default;
-            sbyte* wp = weights + o * 4;
+            sbyte* wp = weights + (o * 4);
             int j = 0;
             for (; j + 8 <= nonZeroCount; j += 8)
             {
                 int* c = nonZeroChunks + j;
-                a0 = TOp.MultiplyAccumulate(a0, Broadcast(input, c[0] * 4), Vector512.LoadAligned(wp + c[0] * stride));
-                a1 = TOp.MultiplyAccumulate(a1, Broadcast(input, c[1] * 4), Vector512.LoadAligned(wp + c[1] * stride));
-                a2 = TOp.MultiplyAccumulate(a2, Broadcast(input, c[2] * 4), Vector512.LoadAligned(wp + c[2] * stride));
-                a3 = TOp.MultiplyAccumulate(a3, Broadcast(input, c[3] * 4), Vector512.LoadAligned(wp + c[3] * stride));
-                a4 = TOp.MultiplyAccumulate(a4, Broadcast(input, c[4] * 4), Vector512.LoadAligned(wp + c[4] * stride));
-                a5 = TOp.MultiplyAccumulate(a5, Broadcast(input, c[5] * 4), Vector512.LoadAligned(wp + c[5] * stride));
-                a6 = TOp.MultiplyAccumulate(a6, Broadcast(input, c[6] * 4), Vector512.LoadAligned(wp + c[6] * stride));
-                a7 = TOp.MultiplyAccumulate(a7, Broadcast(input, c[7] * 4), Vector512.LoadAligned(wp + c[7] * stride));
+                a0 = TOp.MultiplyAccumulate(a0, Broadcast(input, c[0] * 4), Vector512.LoadAligned(wp + (c[0] * stride)));
+                a1 = TOp.MultiplyAccumulate(a1, Broadcast(input, c[1] * 4), Vector512.LoadAligned(wp + (c[1] * stride)));
+                a2 = TOp.MultiplyAccumulate(a2, Broadcast(input, c[2] * 4), Vector512.LoadAligned(wp + (c[2] * stride)));
+                a3 = TOp.MultiplyAccumulate(a3, Broadcast(input, c[3] * 4), Vector512.LoadAligned(wp + (c[3] * stride)));
+                a4 = TOp.MultiplyAccumulate(a4, Broadcast(input, c[4] * 4), Vector512.LoadAligned(wp + (c[4] * stride)));
+                a5 = TOp.MultiplyAccumulate(a5, Broadcast(input, c[5] * 4), Vector512.LoadAligned(wp + (c[5] * stride)));
+                a6 = TOp.MultiplyAccumulate(a6, Broadcast(input, c[6] * 4), Vector512.LoadAligned(wp + (c[6] * stride)));
+                a7 = TOp.MultiplyAccumulate(a7, Broadcast(input, c[7] * 4), Vector512.LoadAligned(wp + (c[7] * stride)));
             }
             for (; j < nonZeroCount; j++)
             {
                 int c0 = nonZeroChunks[j];
-                a0 = TOp.MultiplyAccumulate(a0, Broadcast(input, c0 * 4), Vector512.LoadAligned(wp + c0 * stride));
+                a0 = TOp.MultiplyAccumulate(a0, Broadcast(input, c0 * 4), Vector512.LoadAligned(wp + (c0 * stride)));
             }
-            (((a0 + a1) + (a2 + a3)) + ((a4 + a5) + (a6 + a7))).StoreAligned(output + (long)o);
+            (a0 + a1 + (a2 + a3) + (a4 + a5 + (a6 + a7))).StoreAligned(output + (long)o);
         }
     }
 
@@ -126,7 +125,8 @@ internal static unsafe class Avx512VnniKernels
             a0 = TOp.MultiplyAccumulate(a0, Vector512.Load(input + i), Vector512.LoadAligned(weights + i));
             a1 = TOp.MultiplyAccumulate(a1, Vector512.Load(input + i + 64), Vector512.LoadAligned(weights + i + 64));
         }
-        if (i < paddedInputLength) a0 = TOp.MultiplyAccumulate(a0, Vector512.Load(input + i), Vector512.LoadAligned(weights + i));
+        if (i < paddedInputLength)
+            a0 = TOp.MultiplyAccumulate(a0, Vector512.Load(input + i), Vector512.LoadAligned(weights + i));
         return bias + Vector512.Sum(a0 + a1);
     }
 }

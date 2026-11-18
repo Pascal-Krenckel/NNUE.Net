@@ -1,6 +1,3 @@
-using System.Numerics;
-using System.Runtime.InteropServices;
-
 namespace Nnue.Training.Optimization;
 /// <summary>Result of <see cref="NnueTrainer.CheckGradients"/>: analytic against numeric gradients, per parameter group.</summary>
 public sealed class GradientCheckResult
@@ -8,7 +5,7 @@ public sealed class GradientCheckResult
     /// <summary>One entry per parameter group.</summary>
     public IReadOnlyList<GradientCheckGroup> Groups { get; }
     /// <summary>Creates a result from its groups.</summary>
-    public GradientCheckResult(IReadOnlyList<GradientCheckGroup> groups) { Groups = groups; }
+    public GradientCheckResult(IReadOnlyList<GradientCheckGroup> groups) => Groups = groups;
     /// <summary>Number of compared parameters.</summary>
     public int Probes => Groups.Sum(g => g.Probes);
     /// <summary>Number of parameters whose gradients disagreed beyond the tolerance.</summary>

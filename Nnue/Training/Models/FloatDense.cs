@@ -14,7 +14,8 @@ public sealed class FloatDense
     /// <summary>Creates a zeroed layer.</summary>
     public FloatDense(int inputLength, int outputLength)
     {
-        InputLength = inputLength; OutputLength = outputLength;
+        InputLength = inputLength;
+        OutputLength = outputLength;
         Weights = new float[inputLength * outputLength];
         Biases = new float[outputLength];
     }

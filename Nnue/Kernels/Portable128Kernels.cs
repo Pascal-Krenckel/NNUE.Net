@@ -1,8 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.Arm;
-using System.Runtime.Intrinsics.X86;
 
 namespace Nnue.Kernels;
 
@@ -12,15 +10,15 @@ internal static unsafe class Portable128Kernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static void AddRowToAccumulator(short* row, short* accumulator, int length)
     {
-        for (long i = 0; i < (long)length; i += 8)
-            Vector128.Add(Vector128.LoadAligned(accumulator + (i)), Vector128.LoadAligned(row + (i))).StoreAligned(accumulator + (i));
+        for (long i = 0; i < length; i += 8)
+            Vector128.Add(Vector128.LoadAligned(accumulator + i), Vector128.LoadAligned(row + i)).StoreAligned(accumulator + i);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static void SubtractRowFromAccumulator(short* row, short* accumulator, int length)
     {
-        for (long i = 0; i < (long)length; i += 8)
-            Vector128.Subtract(Vector128.LoadAligned(accumulator + (i)), Vector128.LoadAligned(row + (i))).StoreAligned(accumulator + (i));
+        for (long i = 0; i < length; i += 8)
+            Vector128.Subtract(Vector128.LoadAligned(accumulator + i), Vector128.LoadAligned(row + i)).StoreAligned(accumulator + i);
     }
 
     /// <summary>
@@ -34,18 +32,40 @@ internal static unsafe class Portable128Kernels
         long i = 0, size = accumulatorSize;
         for (; i + 64 <= size; i += 64)
         {
-            var a0 = Vector128.LoadAligned(featureBias + i); var a1 = Vector128.LoadAligned(featureBias + i + 8); var a2 = Vector128.LoadAligned(featureBias + i + 16); var a3 = Vector128.LoadAligned(featureBias + i + 24); var a4 = Vector128.LoadAligned(featureBias + i + 32); var a5 = Vector128.LoadAligned(featureBias + i + 40); var a6 = Vector128.LoadAligned(featureBias + i + 48); var a7 = Vector128.LoadAligned(featureBias + i + 56);
+            Vector128<short> a0 = Vector128.LoadAligned(featureBias + i);
+            Vector128<short> a1 = Vector128.LoadAligned(featureBias + i + 8);
+            Vector128<short> a2 = Vector128.LoadAligned(featureBias + i + 16);
+            Vector128<short> a3 = Vector128.LoadAligned(featureBias + i + 24);
+            Vector128<short> a4 = Vector128.LoadAligned(featureBias + i + 32);
+            Vector128<short> a5 = Vector128.LoadAligned(featureBias + i + 40);
+            Vector128<short> a6 = Vector128.LoadAligned(featureBias + i + 48);
+            Vector128<short> a7 = Vector128.LoadAligned(featureBias + i + 56);
             foreach (int f in activeFeatures)
             {
-                short* row = featureWeights + f * size + i;
-                a0 += Vector128.LoadAligned(row); a1 += Vector128.LoadAligned(row + 8); a2 += Vector128.LoadAligned(row + 16); a3 += Vector128.LoadAligned(row + 24); a4 += Vector128.LoadAligned(row + 32); a5 += Vector128.LoadAligned(row + 40); a6 += Vector128.LoadAligned(row + 48); a7 += Vector128.LoadAligned(row + 56);
+                short* row = featureWeights + (f * size) + i;
+                a0 += Vector128.LoadAligned(row);
+                a1 += Vector128.LoadAligned(row + 8);
+                a2 += Vector128.LoadAligned(row + 16);
+                a3 += Vector128.LoadAligned(row + 24);
+                a4 += Vector128.LoadAligned(row + 32);
+                a5 += Vector128.LoadAligned(row + 40);
+                a6 += Vector128.LoadAligned(row + 48);
+                a7 += Vector128.LoadAligned(row + 56);
             }
-            a0.StoreAligned(accumulator + i); a1.StoreAligned(accumulator + i + 8); a2.StoreAligned(accumulator + i + 16); a3.StoreAligned(accumulator + i + 24); a4.StoreAligned(accumulator + i + 32); a5.StoreAligned(accumulator + i + 40); a6.StoreAligned(accumulator + i + 48); a7.StoreAligned(accumulator + i + 56);
+            a0.StoreAligned(accumulator + i);
+            a1.StoreAligned(accumulator + i + 8);
+            a2.StoreAligned(accumulator + i + 16);
+            a3.StoreAligned(accumulator + i + 24);
+            a4.StoreAligned(accumulator + i + 32);
+            a5.StoreAligned(accumulator + i + 40);
+            a6.StoreAligned(accumulator + i + 48);
+            a7.StoreAligned(accumulator + i + 56);
         }
         for (; i < size; i += 8)
         {
-            var acc = Vector128.LoadAligned(featureBias + i);
-            foreach (int f in activeFeatures) acc += Vector128.LoadAligned(featureWeights + f * size + i);
+            Vector128<short> acc = Vector128.LoadAligned(featureBias + i);
+            foreach (int f in activeFeatures)
+                acc += Vector128.LoadAligned(featureWeights + (f * size) + i);
             acc.StoreAligned(accumulator + i);
         }
     }
@@ -57,24 +77,54 @@ internal static unsafe class Portable128Kernels
         long i = 0, size = accumulatorSize;
         for (; i + 64 <= size; i += 64)
         {
-            var a0 = Vector128.LoadAligned(source + i); var a1 = Vector128.LoadAligned(source + i + 8); var a2 = Vector128.LoadAligned(source + i + 16); var a3 = Vector128.LoadAligned(source + i + 24); var a4 = Vector128.LoadAligned(source + i + 32); var a5 = Vector128.LoadAligned(source + i + 40); var a6 = Vector128.LoadAligned(source + i + 48); var a7 = Vector128.LoadAligned(source + i + 56);
+            Vector128<short> a0 = Vector128.LoadAligned(source + i);
+            Vector128<short> a1 = Vector128.LoadAligned(source + i + 8);
+            Vector128<short> a2 = Vector128.LoadAligned(source + i + 16);
+            Vector128<short> a3 = Vector128.LoadAligned(source + i + 24);
+            Vector128<short> a4 = Vector128.LoadAligned(source + i + 32);
+            Vector128<short> a5 = Vector128.LoadAligned(source + i + 40);
+            Vector128<short> a6 = Vector128.LoadAligned(source + i + 48);
+            Vector128<short> a7 = Vector128.LoadAligned(source + i + 56);
             foreach (int f in removedFeatures)
             {
-                short* row = featureWeights + f * size + i;
-                a0 -= Vector128.LoadAligned(row); a1 -= Vector128.LoadAligned(row + 8); a2 -= Vector128.LoadAligned(row + 16); a3 -= Vector128.LoadAligned(row + 24); a4 -= Vector128.LoadAligned(row + 32); a5 -= Vector128.LoadAligned(row + 40); a6 -= Vector128.LoadAligned(row + 48); a7 -= Vector128.LoadAligned(row + 56);
+                short* row = featureWeights + (f * size) + i;
+                a0 -= Vector128.LoadAligned(row);
+                a1 -= Vector128.LoadAligned(row + 8);
+                a2 -= Vector128.LoadAligned(row + 16);
+                a3 -= Vector128.LoadAligned(row + 24);
+                a4 -= Vector128.LoadAligned(row + 32);
+                a5 -= Vector128.LoadAligned(row + 40);
+                a6 -= Vector128.LoadAligned(row + 48);
+                a7 -= Vector128.LoadAligned(row + 56);
             }
             foreach (int f in addedFeatures)
             {
-                short* row = featureWeights + f * size + i;
-                a0 += Vector128.LoadAligned(row); a1 += Vector128.LoadAligned(row + 8); a2 += Vector128.LoadAligned(row + 16); a3 += Vector128.LoadAligned(row + 24); a4 += Vector128.LoadAligned(row + 32); a5 += Vector128.LoadAligned(row + 40); a6 += Vector128.LoadAligned(row + 48); a7 += Vector128.LoadAligned(row + 56);
+                short* row = featureWeights + (f * size) + i;
+                a0 += Vector128.LoadAligned(row);
+                a1 += Vector128.LoadAligned(row + 8);
+                a2 += Vector128.LoadAligned(row + 16);
+                a3 += Vector128.LoadAligned(row + 24);
+                a4 += Vector128.LoadAligned(row + 32);
+                a5 += Vector128.LoadAligned(row + 40);
+                a6 += Vector128.LoadAligned(row + 48);
+                a7 += Vector128.LoadAligned(row + 56);
             }
-            a0.StoreAligned(destination + i); a1.StoreAligned(destination + i + 8); a2.StoreAligned(destination + i + 16); a3.StoreAligned(destination + i + 24); a4.StoreAligned(destination + i + 32); a5.StoreAligned(destination + i + 40); a6.StoreAligned(destination + i + 48); a7.StoreAligned(destination + i + 56);
+            a0.StoreAligned(destination + i);
+            a1.StoreAligned(destination + i + 8);
+            a2.StoreAligned(destination + i + 16);
+            a3.StoreAligned(destination + i + 24);
+            a4.StoreAligned(destination + i + 32);
+            a5.StoreAligned(destination + i + 40);
+            a6.StoreAligned(destination + i + 48);
+            a7.StoreAligned(destination + i + 56);
         }
         for (; i < size; i += 8)
         {
-            var acc = Vector128.LoadAligned(source + i);
-            foreach (int f in removedFeatures) acc -= Vector128.LoadAligned(featureWeights + f * size + i);
-            foreach (int f in addedFeatures) acc += Vector128.LoadAligned(featureWeights + f * size + i);
+            Vector128<short> acc = Vector128.LoadAligned(source + i);
+            foreach (int f in removedFeatures)
+                acc -= Vector128.LoadAligned(featureWeights + (f * size) + i);
+            foreach (int f in addedFeatures)
+                acc += Vector128.LoadAligned(featureWeights + (f * size) + i);
             acc.StoreAligned(destination + i);
         }
     }
@@ -82,55 +132,58 @@ internal static unsafe class Portable128Kernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static void ApplyCReLU(short* accumulator, byte* output, int length)
     {
-        var zero = Vector128<short>.Zero; var max = Vector128.Create((short)127);
-        long i = 0, len = (long)length;
+        Vector128<short> zero = Vector128<short>.Zero;
+        Vector128<short> max = Vector128.Create((short)127);
+        long i = 0, len = length;
         for (; i + 16 <= len; i += 16)
         {
-            var a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i)), zero), max);
-            var c = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i + 8)), zero), max);
-            Vector128.Narrow(a.AsUInt16(), c.AsUInt16()).Store(output + (i));
+            Vector128<short> a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + i), zero), max);
+            Vector128<short> c = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i + 8)), zero), max);
+            Vector128.Narrow(a.AsUInt16(), c.AsUInt16()).Store(output + i);
         }
         if (i < len)
         {
-            var a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i)), zero), max);
-            Vector128.Narrow(a.AsUInt16(), Vector128<ushort>.Zero).GetLower().Store(output + (i));
+            Vector128<short> a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + i), zero), max);
+            Vector128.Narrow(a.AsUInt16(), Vector128<ushort>.Zero).GetLower().Store(output + i);
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Vector128<ushort> PairProduct128(short* accumulator, long offset, long halfLength, Vector128<short> zero, Vector128<short> max)
     {
-        var a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (offset)), zero), max).AsUInt16();
-        var c = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (offset + halfLength)), zero), max).AsUInt16();
+        Vector128<ushort> a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + offset), zero), max).AsUInt16();
+        Vector128<ushort> c = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (offset + halfLength)), zero), max).AsUInt16();
         return Vector128.ShiftRightLogical(a * c, 9);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static void ApplyPairwise(short* accumulator, byte* output, int halfLength)
     {
-        var zero = Vector128<short>.Zero; var max = Vector128.Create((short)255);
-        long i = 0, len = (long)halfLength;
+        Vector128<short> zero = Vector128<short>.Zero;
+        Vector128<short> max = Vector128.Create((short)255);
+        long i = 0, len = halfLength;
         for (; i + 16 <= len; i += 16)
-            Vector128.Narrow(PairProduct128(accumulator, i, len, zero, max), PairProduct128(accumulator, i + 8, len, zero, max)).Store(output + (i));
+            Vector128.Narrow(PairProduct128(accumulator, i, len, zero, max), PairProduct128(accumulator, i + 8, len, zero, max)).Store(output + i);
         if (i < len)
-            Vector128.Narrow(PairProduct128(accumulator, i, len, zero, max), Vector128<ushort>.Zero).GetLower().Store(output + (i));
+            Vector128.Narrow(PairProduct128(accumulator, i, len, zero, max), Vector128<ushort>.Zero).GetLower().Store(output + i);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static void ApplySCReLU(short* accumulator, byte* output, int length)
     {
-        var zero = Vector128<short>.Zero; var max = Vector128.Create((short)255);
-        long i = 0, len = (long)length;
+        Vector128<short> zero = Vector128<short>.Zero;
+        Vector128<short> max = Vector128.Create((short)255);
+        long i = 0, len = length;
         for (; i + 16 <= len; i += 16)
         {
-            var a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i)), zero), max).AsUInt16();
-            var c = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i + 8)), zero), max).AsUInt16();
-            Vector128.Narrow(Vector128.ShiftRightLogical(a * a, 9), Vector128.ShiftRightLogical(c * c, 9)).Store(output + (i));
+            Vector128<ushort> a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + i), zero), max).AsUInt16();
+            Vector128<ushort> c = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i + 8)), zero), max).AsUInt16();
+            Vector128.Narrow(Vector128.ShiftRightLogical(a * a, 9), Vector128.ShiftRightLogical(c * c, 9)).Store(output + i);
         }
         if (i < len)
         {
-            var a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (i)), zero), max).AsUInt16();
-            Vector128.Narrow(Vector128.ShiftRightLogical(a * a, 9), Vector128<ushort>.Zero).GetLower().Store(output + (i));
+            Vector128<ushort> a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + i), zero), max).AsUInt16();
+            Vector128.Narrow(Vector128.ShiftRightLogical(a * a, 9), Vector128<ushort>.Zero).GetLower().Store(output + i);
         }
     }
 
@@ -153,7 +206,7 @@ internal static unsafe class Portable128Kernels
         for (int c = 0; c < chunks; c += 4)
         {
             uint m = ~Vector128.Equals(Vector128.LoadAligned(src + c), Vector128<int>.Zero).ExtractMostSignificantBits() & 0xFu;
-            Vector128.Add(Vector128.LoadAligned(lut + m * 8), Vector128.Create((uint)c)).AsInt32().Store(nonZeroChunks + count);
+            Vector128.Add(Vector128.LoadAligned(lut + (m * 8)), Vector128.Create((uint)c)).AsInt32().Store(nonZeroChunks + count);
             count += BitOperations.PopCount(m);
         }
         return count;
@@ -162,7 +215,7 @@ internal static unsafe class Portable128Kernels
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static Vector128<int> SquareClippedLane(Vector128<int> v, Vector128<int> lo, Vector128<int> hi, Vector128<int> cap)
     {
-        var x = Vector128.Min(Vector128.Max(v, lo), hi);
+        Vector128<int> x = Vector128.Min(Vector128.Max(v, lo), hi);
         return Vector128.Min(Vector128.ShiftRightLogical(x * x, 19), cap);
     }
 
@@ -171,30 +224,33 @@ internal static unsafe class Portable128Kernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static void ActivateSqrClippedReLU(int* source, byte* destination, int length)
     {
-        var lo = Vector128.Create(-32768); var hi = Vector128.Create(32767); var cap = Vector128.Create(127);
-        for (long i = 0; i < (long)length; i += 16)
+        Vector128<int> lo = Vector128.Create(-32768);
+        Vector128<int> hi = Vector128.Create(32767);
+        Vector128<int> cap = Vector128.Create(127);
+        for (long i = 0; i < length; i += 16)
         {
-            var a = SquareClippedLane(Vector128.LoadAligned(source + (i)), lo, hi, cap);
-            var c = SquareClippedLane(Vector128.LoadAligned(source + (i + 4)), lo, hi, cap);
-            var d = SquareClippedLane(Vector128.LoadAligned(source + (i + 8)), lo, hi, cap);
-            var e = SquareClippedLane(Vector128.LoadAligned(source + (i + 12)), lo, hi, cap);
-            Vector128.Narrow(Vector128.Narrow(a, c).AsUInt16(), Vector128.Narrow(d, e).AsUInt16()).Store(destination + (i));
+            Vector128<int> a = SquareClippedLane(Vector128.LoadAligned(source + i), lo, hi, cap);
+            Vector128<int> c = SquareClippedLane(Vector128.LoadAligned(source + (i + 4)), lo, hi, cap);
+            Vector128<int> d = SquareClippedLane(Vector128.LoadAligned(source + (i + 8)), lo, hi, cap);
+            Vector128<int> e = SquareClippedLane(Vector128.LoadAligned(source + (i + 12)), lo, hi, cap);
+            Vector128.Narrow(Vector128.Narrow(a, c).AsUInt16(), Vector128.Narrow(d, e).AsUInt16()).Store(destination + i);
         }
     }
 
     /// <summary>Hidden activation: dst[i] = clamp(z[i] >> 6, 0, 127), n % 16 == 0.</summary>
     internal static void ActivateClippedReLU(int* source, byte* destination, int length)
     {
-        var zero = Vector128<int>.Zero; var max = Vector128.Create(127);
-        for (long i = 0; i < (long)length; i += 16)
+        Vector128<int> zero = Vector128<int>.Zero;
+        Vector128<int> max = Vector128.Create(127);
+        for (long i = 0; i < length; i += 16)
         {
-            var a = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + (i)), 6), zero), max);
-            var c = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + (i + 4)), 6), zero), max);
-            var d = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + (i + 8)), 6), zero), max);
-            var e = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + (i + 12)), 6), zero), max);
-            var s0 = Vector128.Narrow(a, c);
-            var s1 = Vector128.Narrow(d, e);
-            Vector128.Narrow(s0.AsUInt16(), s1.AsUInt16()).Store(destination + (i));
+            Vector128<int> a = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + i), 6), zero), max);
+            Vector128<int> c = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + (i + 4)), 6), zero), max);
+            Vector128<int> d = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + (i + 8)), 6), zero), max);
+            Vector128<int> e = Vector128.Min(Vector128.Max(Vector128.ShiftRightArithmetic(Vector128.LoadAligned(source + (i + 12)), 6), zero), max);
+            Vector128<short> s0 = Vector128.Narrow(a, c);
+            Vector128<short> s1 = Vector128.Narrow(d, e);
+            Vector128.Narrow(s0.AsUInt16(), s1.AsUInt16()).Store(destination + i);
         }
     }
 }

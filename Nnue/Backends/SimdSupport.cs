@@ -33,19 +33,15 @@ public static class SimdSupport
     /// AVX-VNNI is a preview API in .NET 8 (CA2252) and stable from .NET 9 (the net10.0 build of this library uses it without preview). The analyzer error is suppressed here and in
     /// <c>VnniHw</c> only, so the assembly itself is not marked as preview. Define NNUE_NO_AVXVNNI to compile it out completely.
     /// </summary>
-    private static bool AvxVnniHardware
-    {
-        get
-        {
+    private static bool AvxVnniHardware =>
 #if NNUE_NO_AVXVNNI
             return false;
 #else
 #pragma warning disable CA2252
-            return AvxVnni.IsSupported;
+            AvxVnni.IsSupported;
 #pragma warning restore CA2252
 #endif
-        }
-    }
+
 
     /// <summary>
     /// Fastest backend available on the current CPU: <see cref="SimdBackend.Avx512Vnni"/> where available (net11.0 build), else
@@ -56,14 +52,19 @@ public static class SimdSupport
     {
         get
         {
-            if (IsSupported(SimdBackend.Avx512Vnni)) return SimdBackend.Avx512Vnni;
-            if (IsSupported(SimdBackend.Avx512)) return SimdBackend.Avx512;
-            if (IsSupported(SimdBackend.AvxVnni)) return SimdBackend.AvxVnni;
-            if (IsSupported(SimdBackend.Avx2)) return SimdBackend.Avx2;
-            if (IsSupported(SimdBackend.Sse)) return SimdBackend.Sse;
-            if (IsSupported(SimdBackend.NeonDotProd)) return SimdBackend.NeonDotProd;
-            if (IsSupported(SimdBackend.Neon)) return SimdBackend.Neon;
-            return SimdBackend.Scalar;
+            if (IsSupported(SimdBackend.Avx512Vnni))
+                return SimdBackend.Avx512Vnni;
+            if (IsSupported(SimdBackend.Avx512))
+                return SimdBackend.Avx512;
+            if (IsSupported(SimdBackend.AvxVnni))
+                return SimdBackend.AvxVnni;
+            return IsSupported(SimdBackend.Avx2)
+                ? SimdBackend.Avx2
+                : IsSupported(SimdBackend.Sse)
+                ? SimdBackend.Sse
+                : IsSupported(SimdBackend.NeonDotProd)
+                ? SimdBackend.NeonDotProd
+                : IsSupported(SimdBackend.Neon) ? SimdBackend.Neon : SimdBackend.Scalar;
         }
     }
 

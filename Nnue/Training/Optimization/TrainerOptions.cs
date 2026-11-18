@@ -1,5 +1,3 @@
-using System.Numerics;
-using System.Runtime.InteropServices;
 using Nnue.Training.Quantization;
 
 namespace Nnue.Training.Optimization;
@@ -36,14 +34,23 @@ public sealed class TrainerOptions
     internal void Validate()
     {
         static bool Positive(float x) => float.IsFinite(x) && x > 0f;
-        if (BatchSize <= 0) throw new ArgumentException("BatchSize must be > 0.", nameof(BatchSize));
-        if (!Positive(LearningRate)) throw new ArgumentException("LearningRate must be a positive number.", nameof(LearningRate));
-        if (!Positive(LearningRateDecay)) throw new ArgumentException("LearningRateDecay must be a positive number.", nameof(LearningRateDecay));
-        if (!(Beta1 is >= 0f and < 1f)) throw new ArgumentException("Beta1 must be in [0, 1).", nameof(Beta1));
-        if (!(Beta2 is >= 0f and < 1f)) throw new ArgumentException("Beta2 must be in [0, 1).", nameof(Beta2));
-        if (!Positive(Epsilon)) throw new ArgumentException("Epsilon must be a positive number.", nameof(Epsilon));
-        if (!Positive(FeatureWeightClip)) throw new ArgumentException("FeatureWeightClip must be a positive number.", nameof(FeatureWeightClip));
-        if (DenseWeightClip is { } clip && !Positive(clip)) throw new ArgumentException("DenseWeightClip must be a positive number or null.", nameof(DenseWeightClip));
-        if (!Enum.IsDefined(Loss)) throw new ArgumentException($"Unknown loss function {(int)Loss}.", nameof(Loss));
+        if (BatchSize <= 0)
+            throw new ArgumentException("BatchSize must be > 0.", nameof(BatchSize));
+        if (!Positive(LearningRate))
+            throw new ArgumentException("LearningRate must be a positive number.", nameof(LearningRate));
+        if (!Positive(LearningRateDecay))
+            throw new ArgumentException("LearningRateDecay must be a positive number.", nameof(LearningRateDecay));
+        if (Beta1 is not (>= 0f and < 1f))
+            throw new ArgumentException("Beta1 must be in [0, 1).", nameof(Beta1));
+        if (Beta2 is not (>= 0f and < 1f))
+            throw new ArgumentException("Beta2 must be in [0, 1).", nameof(Beta2));
+        if (!Positive(Epsilon))
+            throw new ArgumentException("Epsilon must be a positive number.", nameof(Epsilon));
+        if (!Positive(FeatureWeightClip))
+            throw new ArgumentException("FeatureWeightClip must be a positive number.", nameof(FeatureWeightClip));
+        if (DenseWeightClip is { } clip && !Positive(clip))
+            throw new ArgumentException("DenseWeightClip must be a positive number or null.", nameof(DenseWeightClip));
+        if (!Enum.IsDefined(Loss))
+            throw new ArgumentException($"Unknown loss function {(int)Loss}.", nameof(Loss));
     }
 }

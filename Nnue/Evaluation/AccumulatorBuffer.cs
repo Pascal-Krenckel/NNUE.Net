@@ -44,7 +44,7 @@ public sealed unsafe class AccumulatorBuffer : IReadOnlyList<Accumulator>, IDisp
         {
             ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual((uint)index, (uint)Count, nameof(index));
             ThrowIfDisposed();
-            return new Accumulator(_block, _base + (long)index * AccumulatorSize, AccumulatorSize);
+            return new Accumulator(_block, _base + ((long)index * AccumulatorSize), AccumulatorSize);
         }
     }
 
@@ -58,20 +58,27 @@ public sealed unsafe class AccumulatorBuffer : IReadOnlyList<Accumulator>, IDisp
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         ArgumentOutOfRangeException.ThrowIfNegative(sourceIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(destinationIndex);
-        if (sourceIndex + (long)count > Count) throw new ArgumentOutOfRangeException(nameof(sourceIndex), "The source range exceeds the buffer.");
-        if (destinationIndex + (long)count > Count) throw new ArgumentOutOfRangeException(nameof(destinationIndex), "The destination range exceeds the buffer.");
-        if (sourceIndex == destinationIndex || count == 0) return;
+        if (sourceIndex + (long)count > Count)
+            throw new ArgumentOutOfRangeException(nameof(sourceIndex), "The source range exceeds the buffer.");
+        if (destinationIndex + (long)count > Count)
+            throw new ArgumentOutOfRangeException(nameof(destinationIndex), "The destination range exceeds the buffer.");
+        if (sourceIndex == destinationIndex || count == 0)
+            return;
 
         long bytes = (long)count * AccumulatorSize * sizeof(short);
-        short* source = _base + (long)sourceIndex * AccumulatorSize, destination = _base + (long)destinationIndex * AccumulatorSize;
+        short* source = _base + ((long)sourceIndex * AccumulatorSize), destination = _base + ((long)destinationIndex * AccumulatorSize);
         bool overlap = sourceIndex < destinationIndex + count && destinationIndex < sourceIndex + count;
-        if (overlap) Buffer.MemoryCopy(source, destination, bytes, bytes); else Unsafe.CopyBlock(destination, source, (uint)bytes);
+        if (overlap)
+            Buffer.MemoryCopy(source, destination, bytes, bytes);
+        else
+            Unsafe.CopyBlock(destination, source, (uint)bytes);
     }
 
     /// <summary>Enumerates the accumulators in index order.</summary>
     public IEnumerator<Accumulator> GetEnumerator()
     {
-        for (int i = 0; i < Count; i++) yield return this[i];
+        for (int i = 0; i < Count; i++)
+            yield return this[i];
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

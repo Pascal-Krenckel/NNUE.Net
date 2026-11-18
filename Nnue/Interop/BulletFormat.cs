@@ -31,7 +31,7 @@ public static class BulletFormat
     public static NnueModel Load(Stream stream, NetworkSpec spec, BulletFormatOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        using var buffer = new MemoryStream();
+        using MemoryStream buffer = new();
         stream.CopyTo(buffer);
         return Load(buffer.GetBuffer().AsSpan(0, (int)buffer.Length), spec, options);
     }
@@ -39,7 +39,7 @@ public static class BulletFormat
     /// <summary>Reads a bullet file.</summary>
     public static NnueModel Load(string path, NetworkSpec spec, BulletFormatOptions? options = null)
     {
-        using var file = File.OpenRead(path);
+        using FileStream file = File.OpenRead(path);
         return Load(file, spec, options);
     }
 
@@ -49,7 +49,7 @@ public static class BulletFormat
         options ??= new BulletFormatOptions();
         CheckSpec(spec);
         CheckOptions(options);
-        var builder = new NnueModelBuilder(spec);
+        NnueModelBuilder builder = new(spec);
         try
         {
             long expected = ExpectedLength(spec, options);
@@ -62,22 +62,24 @@ public static class BulletFormat
             ReadInt16(data, ref position, builder.FeatureBiases);
 
             int inputs = spec.Slots * spec.AccumulatorSize, buckets = spec.OutputBuckets;
-            var raw = new short[inputs * buckets];
+            short[] raw = new short[inputs * buckets];
             ReadInt16(data, ref position, raw);
             for (int b = 0; b < buckets; b++)
             {
-                var destination = builder.GetOutputWeights(b);
+                Span<short> destination = builder.GetOutputWeights(b);
                 for (int i = 0; i < inputs; i++)
-                    destination[i] = options.OutputWeightsLayout == BulletOutputWeightsLayout.BucketMajor ? raw[b * inputs + i] : raw[i * buckets + b];
+                    destination[i] = options.OutputWeightsLayout == BulletOutputWeightsLayout.BucketMajor ? raw[(b * inputs) + i] : raw[(i * buckets) + b];
             }
 
             int biasScale = spec.Activation == FeatureTransformerActivation.SquaredClippedReLU ? spec.ActivationQuantization : 1;
-            var biases = builder.OutputBiases;
+            Span<int> biases = builder.OutputBiases;
             for (int b = 0; b < buckets; b++)
             {
                 int bias;
-                if (options.OutputBiasesAreInt32) { bias = BinaryPrimitives.ReadInt32LittleEndian(data[position..]); position += sizeof(int); }
-                else { bias = BinaryPrimitives.ReadInt16LittleEndian(data[position..]); position += sizeof(short); }
+                if (options.OutputBiasesAreInt32)
+                { bias = BinaryPrimitives.ReadInt32LittleEndian(data[position..]); position += sizeof(int); }
+                else
+                { bias = BinaryPrimitives.ReadInt16LittleEndian(data[position..]); position += sizeof(short); }
                 biases[b] = checked(bias * biasScale);
             }
             return builder.Build();
@@ -92,23 +94,24 @@ public static class BulletFormat
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(stream);
         options ??= new BulletFormatOptions();
-        var spec = model.Spec;
+        NetworkSpec spec = model.Spec;
         CheckSpec(spec);
         CheckOptions(options);
-        using var output = new MemoryStream();
-        var scratch = new byte[4];
+        using MemoryStream output = new();
+        byte[] scratch = new byte[4];
 
-        void WriteInt16(ReadOnlySpan<short> values) { foreach (short v in values) { BinaryPrimitives.WriteInt16LittleEndian(scratch, v); output.Write(scratch, 0, 2); } }
+        void WriteInt16(ReadOnlySpan<short> values)
+        { foreach (short v in values) { BinaryPrimitives.WriteInt16LittleEndian(scratch, v); output.Write(scratch, 0, 2); } }
 
         WriteInt16(model.FeatureWeights);
         WriteInt16(model.FeatureBiases);
         int inputs = spec.Slots * spec.AccumulatorSize, buckets = spec.OutputBuckets;
-        var raw = new short[inputs * buckets];
+        short[] raw = new short[inputs * buckets];
         for (int b = 0; b < buckets; b++)
         {
-            var source = model.GetOutputWeights(b);
+            ReadOnlySpan<short> source = model.GetOutputWeights(b);
             for (int i = 0; i < inputs; i++)
-                raw[options.OutputWeightsLayout == BulletOutputWeightsLayout.BucketMajor ? b * inputs + i : i * buckets + b] = source[i];
+                raw[options.OutputWeightsLayout == BulletOutputWeightsLayout.BucketMajor ? (b * inputs) + i : (i * buckets) + b] = source[i];
         }
         WriteInt16(raw);
 
@@ -116,14 +119,18 @@ public static class BulletFormat
         for (int b = 0; b < buckets; b++)
         {
             int bias = (int)Math.Round(model.GetOutputBias(b) / (double)biasScale);
-            if (options.OutputBiasesAreInt32) { BinaryPrimitives.WriteInt32LittleEndian(scratch, bias); output.Write(scratch, 0, 4); }
+            if (options.OutputBiasesAreInt32)
+            { BinaryPrimitives.WriteInt32LittleEndian(scratch, bias); output.Write(scratch, 0, 4); }
             else
             {
-                if (bias is < short.MinValue or > short.MaxValue) throw new ArgumentException($"Output bias {bias} of bucket {b} does not fit int16; use BulletFormatOptions.OutputBiasesAreInt32.");
-                BinaryPrimitives.WriteInt16LittleEndian(scratch, (short)bias); output.Write(scratch, 0, 2);
+                if (bias is < short.MinValue or > short.MaxValue)
+                    throw new ArgumentException($"Output bias {bias} of bucket {b} does not fit int16; use BulletFormatOptions.OutputBiasesAreInt32.");
+                BinaryPrimitives.WriteInt16LittleEndian(scratch, (short)bias);
+                output.Write(scratch, 0, 2);
             }
         }
-        while (output.Length % Padding != 0) output.WriteByte(0);
+        while (output.Length % Padding != 0)
+            output.WriteByte(0);
         output.Position = 0;
         output.CopyTo(stream);
     }
@@ -131,7 +138,7 @@ public static class BulletFormat
     /// <summary>Writes the model to a file in bullet's format.</summary>
     public static void Save(NnueModel model, string path, BulletFormatOptions? options = null)
     {
-        using var file = File.Create(path);
+        using FileStream file = File.Create(path);
         Save(model, file, options);
     }
 
@@ -139,24 +146,28 @@ public static class BulletFormat
     {
         ArgumentNullException.ThrowIfNull(spec);
         spec.Validate();
-        if (spec.Precision != NetworkPrecision.Int16) throw new ArgumentException("The bullet format is supported for Int16 networks (one output layer) only.", nameof(spec));
-        if (!BitConverter.IsLittleEndian) throw new PlatformNotSupportedException("Big endian platforms are not supported.");
+        if (spec.Precision != NetworkPrecision.Int16)
+            throw new ArgumentException("The bullet format is supported for Int16 networks (one output layer) only.", nameof(spec));
+        if (!BitConverter.IsLittleEndian)
+            throw new PlatformNotSupportedException("Big endian platforms are not supported.");
     }
 
     private static void CheckOptions(BulletFormatOptions options)
     {
-        if (!Enum.IsDefined(options.OutputWeightsLayout)) throw new ArgumentOutOfRangeException(nameof(options), $"Unknown output weights layout {(int)options.OutputWeightsLayout}.");
+        if (!Enum.IsDefined(options.OutputWeightsLayout))
+            throw new ArgumentOutOfRangeException(nameof(options), $"Unknown output weights layout {(int)options.OutputWeightsLayout}.");
     }
 
     private static long ExpectedLength(NetworkSpec spec, BulletFormatOptions options)
     {
-        long shorts = (long)spec.FeatureCount * spec.AccumulatorSize + spec.AccumulatorSize + (long)spec.Slots * spec.AccumulatorSize * spec.OutputBuckets;
-        return shorts * sizeof(short) + (long)spec.OutputBuckets * (options.OutputBiasesAreInt32 ? sizeof(int) : sizeof(short));
+        long shorts = ((long)spec.FeatureCount * spec.AccumulatorSize) + spec.AccumulatorSize + ((long)spec.Slots * spec.AccumulatorSize * spec.OutputBuckets);
+        return (shorts * sizeof(short)) + ((long)spec.OutputBuckets * (options.OutputBiasesAreInt32 ? sizeof(int) : sizeof(short)));
     }
 
     private static void ReadInt16(ReadOnlySpan<byte> data, ref int position, Span<short> destination)
     {
-        for (int i = 0; i < destination.Length; i++) destination[i] = BinaryPrimitives.ReadInt16LittleEndian(data[(position + i * 2)..]);
+        for (int i = 0; i < destination.Length; i++)
+            destination[i] = BinaryPrimitives.ReadInt16LittleEndian(data[(position + (i * 2))..]);
         position += destination.Length * sizeof(short);
     }
 }

@@ -7,12 +7,14 @@ internal static unsafe class ScalarKernels
 {
     internal static void AddRowToAccumulator(short* row, short* accumulator, int length)
     {
-        for (int i = 0; i < length; i++) accumulator[i] = (short)(accumulator[i] + row[i]);
+        for (int i = 0; i < length; i++)
+            accumulator[i] = (short)(accumulator[i] + row[i]);
     }
 
     internal static void SubtractRowFromAccumulator(short* row, short* accumulator, int length)
     {
-        for (int i = 0; i < length; i++) accumulator[i] = (short)(accumulator[i] - row[i]);
+        for (int i = 0; i < length; i++)
+            accumulator[i] = (short)(accumulator[i] - row[i]);
     }
 
     internal static void RefreshAccumulator(short* featureWeights, short* featureBias, ReadOnlySpan<int> activeFeatures, short* accumulator, int accumulatorSize)
@@ -20,7 +22,8 @@ internal static unsafe class ScalarKernels
         for (int i = 0; i < accumulatorSize; i++)
         {
             int s = featureBias[i];
-            foreach (int f in activeFeatures) s += featureWeights[(long)f * accumulatorSize + i];
+            foreach (int f in activeFeatures)
+                s += featureWeights[((long)f * accumulatorSize) + i];
             accumulator[i] = (short)s;
         }
     }
@@ -30,15 +33,18 @@ internal static unsafe class ScalarKernels
         for (int i = 0; i < accumulatorSize; i++)
         {
             int s = source[i];
-            foreach (int f in removedFeatures) s -= featureWeights[(long)f * accumulatorSize + i];
-            foreach (int f in addedFeatures) s += featureWeights[(long)f * accumulatorSize + i];
+            foreach (int f in removedFeatures)
+                s -= featureWeights[((long)f * accumulatorSize) + i];
+            foreach (int f in addedFeatures)
+                s += featureWeights[((long)f * accumulatorSize) + i];
             destination[i] = (short)s;
         }
     }
 
     internal static void ApplyCReLU(short* accumulator, byte* output, int length)
     {
-        for (int i = 0; i < length; i++) output[i] = (byte)Math.Clamp((int)accumulator[i], 0, 127);
+        for (int i = 0; i < length; i++)
+            output[i] = (byte)Math.Clamp((int)accumulator[i], 0, 127);
     }
 
     internal static void ApplySCReLU(short* accumulator, byte* output, int length)
@@ -66,7 +72,7 @@ internal static unsafe class ScalarKernels
         {
             int s = biases[o];
             for (int i = 0; i < inputLength; i++)
-                s += input[i] * weights[(i >> 2) * paddedOutputLength * 4 + o * 4 + (i & 3)];
+                s += input[i] * weights[((i >> 2) * paddedOutputLength * 4) + (o * 4) + (i & 3)];
             output[o] = s;
         }
     }
@@ -80,7 +86,7 @@ internal static unsafe class ScalarKernels
             {
                 int c = nonZeroChunks[j];
                 for (int t = 0; t < 4; t++)
-                    s += input[c * 4 + t] * weights[c * paddedOutputLength * 4 + o * 4 + t];
+                    s += input[(c * 4) + t] * weights[(c * paddedOutputLength * 4) + (o * 4) + t];
             }
             output[o] = s;
         }
@@ -89,7 +95,9 @@ internal static unsafe class ScalarKernels
     internal static int CountNonZeroChunks(int* input, int chunkCount)
     {
         int count = 0;
-        for (int c = 0; c < chunkCount; c++) if (input[c] != 0) count++;
+        for (int c = 0; c < chunkCount; c++)
+            if (input[c] != 0)
+                count++;
         return count;
     }
 
@@ -97,13 +105,15 @@ internal static unsafe class ScalarKernels
     {
         int count = 0;
         for (int c = 0; c < (inputLength >> 2); c++)
-            if (Unsafe.ReadUnaligned<int>((input + (c * 4))) != 0) nonZeroChunks[count++] = c;
+            if (Unsafe.ReadUnaligned<int>(input + (c * 4)) != 0)
+                nonZeroChunks[count++] = c;
         return count;
     }
 
     internal static void ActivateClippedReLU(int* source, byte* destination, int length)
     {
-        for (int i = 0; i < length; i++) destination[i] = (byte)Math.Clamp(source[i] >> 6, 0, 127);
+        for (int i = 0; i < length; i++)
+            destination[i] = (byte)Math.Clamp(source[i] >> 6, 0, 127);
     }
 
     internal static void ActivateSqrClippedReLU(int* source, byte* destination, int length)
@@ -121,7 +131,7 @@ internal static unsafe class ScalarKernels
         int sum = 0;
         for (int s = 0; s < accumulatorCount; s++)
             for (int i = 0; i < accumulatorSize; i++)
-                sum += Math.Clamp((int)accumulators[s][i], 0, clipMax) * weights[s * accumulatorSize + i];
+                sum += Math.Clamp((int)accumulators[s][i], 0, clipMax) * weights[(s * accumulatorSize) + i];
         return sum;
     }
 
@@ -133,7 +143,7 @@ internal static unsafe class ScalarKernels
             for (int i = 0; i < accumulatorSize; i++)
             {
                 int c = Math.Clamp((int)accumulators[s][i], 0, clipMax);
-                sum += (short)(c * weights[s * accumulatorSize + i]) * c;
+                sum += (short)(c * weights[(s * accumulatorSize) + i]) * c;
             }
         return sum;
     }
@@ -143,7 +153,8 @@ internal static unsafe class ScalarKernels
     internal static int AffineTransformSingleOutput(byte* input, sbyte* weights, int bias, int paddedInputLength)
     {
         int s = bias;
-        for (int i = 0; i < paddedInputLength; i++) s += input[i] * weights[i];
+        for (int i = 0; i < paddedInputLength; i++)
+            s += input[i] * weights[i];
         return s;
     }
 }

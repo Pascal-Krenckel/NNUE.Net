@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 using Nnue.Backends;
 
@@ -19,16 +18,15 @@ internal static unsafe class VnniKernels
     internal readonly struct VnniHw : IVnniOp
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector256<int> MultiplyAccumulate(Vector256<int> accumulator, Vector256<byte> unsignedValues, Vector256<sbyte> signedValues)
-        {
+        public static Vector256<int> MultiplyAccumulate(Vector256<int> accumulator, Vector256<byte> unsignedValues, Vector256<sbyte> signedValues) =>
 #if NNUE_NO_AVXVNNI
             throw new PlatformNotSupportedException("Compiled with NNUE_NO_AVXVNNI.");
 #else
 #pragma warning disable CA2252
-            return AvxVnni.MultiplyWideningAndAdd(accumulator, unsignedValues, signedValues);
+            AvxVnni.MultiplyWideningAndAdd(accumulator, unsignedValues, signedValues);
 #pragma warning restore CA2252
 #endif
-        }
+
     }
 
     /// <summary>Software model of vpdpbusd on AVX2. Identical results as long as |u*s| pair sums fit int16 (u &lt;= 127, |s| &lt;= 127).</summary>
@@ -50,20 +48,23 @@ internal static unsafe class VnniKernels
         int stride = paddedOutputLength * 4;
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector256.LoadAligned(biases + ((long)o));
-            var a1 = Vector256.LoadAligned(biases + ((long)o + 8));
-            var b0 = Vector256<int>.Zero; var b1 = Vector256<int>.Zero;
-            var c0 = Vector256<int>.Zero; var c1 = Vector256<int>.Zero;
-            var d0 = Vector256<int>.Zero; var d1 = Vector256<int>.Zero;
-            sbyte* wp = weights + o * 4;
+            Vector256<int> a0 = Vector256.LoadAligned(biases + ((long)o));
+            Vector256<int> a1 = Vector256.LoadAligned(biases + ((long)o + 8));
+            Vector256<int> b0 = Vector256<int>.Zero;
+            Vector256<int> b1 = Vector256<int>.Zero;
+            Vector256<int> c0 = Vector256<int>.Zero;
+            Vector256<int> c1 = Vector256<int>.Zero;
+            Vector256<int> d0 = Vector256<int>.Zero;
+            Vector256<int> d1 = Vector256<int>.Zero;
+            sbyte* wp = weights + (o * 4);
             for (int i = 0; i < inputLength; i += 16)
             {
-                sbyte* wa = wp + (i >> 2) * stride;
-                sbyte* wb = wa + stride, wc = wa + 2 * stride, wd = wa + 3 * stride;
-                var x0 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i)).AsByte();
-                var x1 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i + 4)).AsByte();
-                var x2 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i + 8)).AsByte();
-                var x3 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i + 12)).AsByte();
+                sbyte* wa = wp + ((i >> 2) * stride);
+                sbyte* wb = wa + stride, wc = wa + (2 * stride), wd = wa + (3 * stride);
+                Vector256<byte> x0 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i)).AsByte();
+                Vector256<byte> x1 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i + 4)).AsByte();
+                Vector256<byte> x2 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i + 8)).AsByte();
+                Vector256<byte> x3 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + i + 12)).AsByte();
                 a0 = TOp.MultiplyAccumulate(a0, x0, Vector256.LoadAligned(wa));
                 a1 = TOp.MultiplyAccumulate(a1, x0, Vector256.LoadAligned(wa + 32));
                 b0 = TOp.MultiplyAccumulate(b0, x1, Vector256.LoadAligned(wb));
@@ -86,21 +87,27 @@ internal static unsafe class VnniKernels
         int stride = paddedOutputLength * 4;
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector256.LoadAligned(biases + ((long)o));
-            var a1 = Vector256.LoadAligned(biases + ((long)o + 8));
-            var b0 = Vector256<int>.Zero; var b1 = Vector256<int>.Zero;
-            var c0 = Vector256<int>.Zero; var c1 = Vector256<int>.Zero;
-            var d0 = Vector256<int>.Zero; var d1 = Vector256<int>.Zero;
-            sbyte* wp = weights + o * 4;
+            Vector256<int> a0 = Vector256.LoadAligned(biases + ((long)o));
+            Vector256<int> a1 = Vector256.LoadAligned(biases + ((long)o + 8));
+            Vector256<int> b0 = Vector256<int>.Zero;
+            Vector256<int> b1 = Vector256<int>.Zero;
+            Vector256<int> c0 = Vector256<int>.Zero;
+            Vector256<int> c1 = Vector256<int>.Zero;
+            Vector256<int> d0 = Vector256<int>.Zero;
+            Vector256<int> d1 = Vector256<int>.Zero;
+            sbyte* wp = weights + (o * 4);
             int j = 0;
             for (; j + 4 <= nonZeroCount; j += 4)
             {
                 int k0 = nonZeroChunks[j], k1 = nonZeroChunks[j + 1], k2 = nonZeroChunks[j + 2], k3 = nonZeroChunks[j + 3];
-                sbyte* wa = wp + k0 * stride; sbyte* wb = wp + k1 * stride; sbyte* wc = wp + k2 * stride; sbyte* wd = wp + k3 * stride;
-                var x0 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + k0 * 4)).AsByte();
-                var x1 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + k1 * 4)).AsByte();
-                var x2 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + k2 * 4)).AsByte();
-                var x3 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + k3 * 4)).AsByte();
+                sbyte* wa = wp + (k0 * stride);
+                sbyte* wb = wp + (k1 * stride);
+                sbyte* wc = wp + (k2 * stride);
+                sbyte* wd = wp + (k3 * stride);
+                Vector256<byte> x0 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + (k0 * 4))).AsByte();
+                Vector256<byte> x1 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + (k1 * 4))).AsByte();
+                Vector256<byte> x2 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + (k2 * 4))).AsByte();
+                Vector256<byte> x3 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + (k3 * 4))).AsByte();
                 a0 = TOp.MultiplyAccumulate(a0, x0, Vector256.LoadAligned(wa));
                 a1 = TOp.MultiplyAccumulate(a1, x0, Vector256.LoadAligned(wa + 32));
                 b0 = TOp.MultiplyAccumulate(b0, x1, Vector256.LoadAligned(wb));
@@ -113,8 +120,8 @@ internal static unsafe class VnniKernels
             for (; j < nonZeroCount; j++)
             {
                 int k0 = nonZeroChunks[j];
-                sbyte* wa = wp + k0 * stride;
-                var x0 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + k0 * 4)).AsByte();
+                sbyte* wa = wp + (k0 * stride);
+                Vector256<byte> x0 = Vector256.Create(Unsafe.ReadUnaligned<int>(input + (k0 * 4))).AsByte();
                 a0 = TOp.MultiplyAccumulate(a0, x0, Vector256.LoadAligned(wa));
                 a1 = TOp.MultiplyAccumulate(a1, x0, Vector256.LoadAligned(wa + 32));
             }
@@ -128,7 +135,8 @@ internal static unsafe class VnniKernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int AffineTransformSingleOutputVnni<TOp>(byte* input, sbyte* weights, int bias, int paddedInputLength) where TOp : struct, IVnniOp
     {
-        var a0 = Vector256<int>.Zero; var a1 = Vector256<int>.Zero;
+        Vector256<int> a0 = Vector256<int>.Zero;
+        Vector256<int> a1 = Vector256<int>.Zero;
         for (int i = 0; i < paddedInputLength; i += 64)
         {
             a0 = TOp.MultiplyAccumulate(a0, Vector256.Load(input + i), Vector256.LoadAligned(weights + i));

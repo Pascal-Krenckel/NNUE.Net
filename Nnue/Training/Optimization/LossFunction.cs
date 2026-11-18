@@ -1,6 +1,3 @@
-using System.Numerics;
-using System.Runtime.InteropServices;
-
 namespace Nnue.Training.Optimization;
 /// <summary>The loss the trainer minimises.</summary>
 public enum LossFunction

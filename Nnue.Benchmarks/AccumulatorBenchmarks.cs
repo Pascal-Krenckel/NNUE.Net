@@ -29,7 +29,7 @@ public class AccumulatorBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        var random = new Random(5);
+        Random random = new(5);
         _model = BenchmarkData.CreateRandomModel(NetworkSpec.CreateSimple(FeatureCount, AccumulatorSize, slots: 2), random);
         _evaluator = new NnueEvaluator(_model);
         _accumulators = _model.CreateAccumulators(2);
@@ -45,10 +45,11 @@ public class AccumulatorBenchmarks
     [Benchmark(Baseline = true, OperationsPerInvoke = OperationsPerCall)]
     public void UpdateAccumulator()
     {
-        var source = _accumulators[0]; var destination = _accumulators[1];
+        Accumulator source = _accumulators[0];
+        Accumulator destination = _accumulators[1];
         for (int i = 0; i < OperationsPerCall; i++)
         {
-            var features = Group(i);
+            ReadOnlySpan<int> features = Group(i);
             _evaluator.UpdateAccumulator(source, destination, features[..2], features.Slice(2, 2));
         }
     }
@@ -56,10 +57,11 @@ public class AccumulatorBenchmarks
     [Benchmark(OperationsPerInvoke = OperationsPerCall)]
     public void UpdateAccumulatorUnchecked()
     {
-        var source = _accumulators[0]; var destination = _accumulators[1];
+        Accumulator source = _accumulators[0];
+        Accumulator destination = _accumulators[1];
         for (int i = 0; i < OperationsPerCall; i++)
         {
-            var features = Group(i);
+            ReadOnlySpan<int> features = Group(i);
             _evaluator.UpdateAccumulatorUnchecked(source, destination, features[..2], features.Slice(2, 2));
         }
     }
@@ -67,28 +69,32 @@ public class AccumulatorBenchmarks
     [Benchmark(OperationsPerInvoke = OperationsPerCall)]
     public void RefreshAccumulator16Features()
     {
-        var destination = _accumulators[1];
-        for (int i = 0; i < OperationsPerCall; i++) _evaluator.RefreshAccumulator(destination, Group(i)[..16]);
+        Accumulator destination = _accumulators[1];
+        for (int i = 0; i < OperationsPerCall; i++)
+            _evaluator.RefreshAccumulator(destination, Group(i)[..16]);
     }
 
     [Benchmark(OperationsPerInvoke = OperationsPerCall)]
     public void RefreshAccumulatorUnchecked16Features()
     {
-        var destination = _accumulators[1];
-        for (int i = 0; i < OperationsPerCall; i++) _evaluator.RefreshAccumulatorUnchecked(destination, Group(i)[..16]);
+        Accumulator destination = _accumulators[1];
+        for (int i = 0; i < OperationsPerCall; i++)
+            _evaluator.RefreshAccumulatorUnchecked(destination, Group(i)[..16]);
     }
 
     [Benchmark(OperationsPerInvoke = OperationsPerCall)]
     public void RefreshAccumulator32Features()
     {
-        var destination = _accumulators[1];
-        for (int i = 0; i < OperationsPerCall; i++) _evaluator.RefreshAccumulator(destination, Group(i));
+        Accumulator destination = _accumulators[1];
+        for (int i = 0; i < OperationsPerCall; i++)
+            _evaluator.RefreshAccumulator(destination, Group(i));
     }
 
     [Benchmark(OperationsPerInvoke = OperationsPerCall)]
     public void RefreshAccumulatorUnchecked32Features()
     {
-        var destination = _accumulators[1];
-        for (int i = 0; i < OperationsPerCall; i++) _evaluator.RefreshAccumulatorUnchecked(destination, Group(i));
+        Accumulator destination = _accumulators[1];
+        for (int i = 0; i < OperationsPerCall; i++)
+            _evaluator.RefreshAccumulatorUnchecked(destination, Group(i));
     }
 }

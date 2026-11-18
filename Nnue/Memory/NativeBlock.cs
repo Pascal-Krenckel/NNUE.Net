@@ -12,36 +12,36 @@ internal sealed unsafe class NativeBlock : IDisposable
     public const int Alignment = 64;
 
     private nint _ptr;
-    private readonly long _bytes;
     private readonly Action? _release;      // external memory (e.g. a memory-mapped file): called instead of AlignedFree
 
     public NativeBlock(long bytes)
     {
-        if (bytes < 0) throw new ArgumentOutOfRangeException(nameof(bytes));
-        _bytes = (bytes + Alignment - 1) & ~(long)(Alignment - 1);
-        if (_bytes == 0) _bytes = Alignment;
-        byte* p = (byte*)NativeMemory.AlignedAlloc((nuint)_bytes, Alignment);
-        if (p == null) throw new OutOfMemoryException();
-        NativeMemory.Clear(p, (nuint)_bytes);
+        if (bytes < 0)
+            throw new ArgumentOutOfRangeException(nameof(bytes));
+        Size = (bytes + Alignment - 1) & ~(Alignment - 1);
+        if (Size == 0)
+            Size = Alignment;
+        byte* p = (byte*)NativeMemory.AlignedAlloc((nuint)Size, Alignment);
+        if (p == null)
+            throw new OutOfMemoryException();
+        NativeMemory.Clear(p, (nuint)Size);
         _ptr = (nint)p;
-        GC.AddMemoryPressure(_bytes);
+        GC.AddMemoryPressure(Size);
     }
 
-    private NativeBlock(byte* pointer, long bytes, Action release) { _ptr = (nint)pointer; _bytes = bytes; _release = release; }
+    private NativeBlock(byte* pointer, long bytes, Action release) { _ptr = (nint)pointer; Size = bytes; _release = release; }
 
     /// <summary>
     /// Wraps memory owned by somebody else (a mapped file view). <paramref name="release"/> runs once on Dispose or finalization.
     /// The pointer must be 64-byte aligned.
     /// </summary>
-    public static NativeBlock FromExternal(byte* pointer, long bytes, Action release)
-    {
-        if (((nint)pointer & (Alignment - 1)) != 0) throw new ArgumentException("External memory must be 64-byte aligned.", nameof(pointer));
-        return new NativeBlock(pointer, bytes, release);
-    }
+    public static NativeBlock FromExternal(byte* pointer, long bytes, Action release) => ((nint)pointer & (Alignment - 1)) != 0
+            ? throw new ArgumentException("External memory must be 64-byte aligned.", nameof(pointer))
+            : new NativeBlock(pointer, bytes, release);
 
     /// <summary>Start of the block (64-byte aligned); null after <see cref="Dispose"/>.</summary>
     public byte* Pointer => (byte*)_ptr;
-    public long Size => _bytes;
+    public long Size { get; }
     public bool IsDisposed => _ptr == 0;
 
     public void Dispose()
@@ -55,14 +55,18 @@ internal sealed unsafe class NativeBlock : IDisposable
     private void Free(bool disposing)
     {
         nint p = Interlocked.Exchange(ref _ptr, 0);
-        if (p == 0) return;
+        if (p == 0)
+            return;
         if (_release is not null)
         {
-            if (disposing) { _release(); return; }
-            try { _release(); } catch { }       // an exception in a finalizer would terminate the process
+            if (disposing)
+            { _release(); return; }
+            try
+            { _release(); }
+            catch { }       // an exception in a finalizer would terminate the process
             return;
         }
         NativeMemory.AlignedFree((void*)p);
-        GC.RemoveMemoryPressure(_bytes);
+        GC.RemoveMemoryPressure(Size);
     }
 }

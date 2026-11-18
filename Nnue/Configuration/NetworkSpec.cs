@@ -44,10 +44,9 @@ public sealed record NetworkSpec
     /// <summary>How accumulators are turned into the input of the first dense / output layer.</summary>
     public FeatureTransformerActivation Activation { get; init; } = FeatureTransformerActivation.ClippedReLU;
 
-    private readonly ImmutableArray<int> _hiddenLayerSizes = [];
     /// <summary>Sizes of the hidden dense layers before the 1-output layer. Int8 only; multiples of 16. Empty = activations feed the output layer directly.
     /// Immutable, so a validated spec cannot change under a model built from it.</summary>
-    public ImmutableArray<int> HiddenLayerSizes { get => _hiddenLayerSizes; init => _hiddenLayerSizes = value.IsDefault ? [] : value; }
+    public ImmutableArray<int> HiddenLayerSizes { get; init => field = value.IsDefault ? [] : value; } = [];
 
     /// <summary>Number of dense layers including the 1-output layer (Int8: hidden layers + 1; Int16: 0, its single output layer is not a dense Int8 layer).</summary>
     public int DenseLayerCount => Precision == NetworkPrecision.Int8 ? HiddenLayerSizes.Length + 1 : 0;
@@ -89,9 +88,15 @@ public sealed record NetworkSpec
     /// </summary>
     public static NetworkSpec CreateStockfishLike(int featureCount, int accumulatorSize = 1024, int secondLayerSize = 32, int thirdLayerSize = 32, int outputBuckets = 32) => new()
     {
-        FeatureCount = featureCount, AccumulatorSize = accumulatorSize, Slots = 2,
-        Precision = NetworkPrecision.Int8, Activation = FeatureTransformerActivation.Pairwise,
-        HiddenLayerSizes = [secondLayerSize, thirdLayerSize], HiddenActivation = HiddenActivation.SqrClippedReLU, DenseConnections = true, SkipConnection = true,
+        FeatureCount = featureCount,
+        AccumulatorSize = accumulatorSize,
+        Slots = 2,
+        Precision = NetworkPrecision.Int8,
+        Activation = FeatureTransformerActivation.Pairwise,
+        HiddenLayerSizes = [secondLayerSize, thirdLayerSize],
+        HiddenActivation = HiddenActivation.SqrClippedReLU,
+        DenseConnections = true,
+        SkipConnection = true,
         OutputBuckets = outputBuckets,
     };
 
@@ -119,7 +124,8 @@ public sealed record NetworkSpec
     /// <summary>Like <see cref="Validate"/>, but reports the problem instead of throwing.</summary>
     public bool TryValidate([System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? error)
     {
-        try { Validate(); error = null; return true; }
+        try
+        { Validate(); error = null; return true; }
         catch (ArgumentException e) { error = e.Message; return false; }
     }
 
@@ -127,44 +133,65 @@ public sealed record NetworkSpec
     public void Validate()
     {
         // enum values come from files too: an undefined value would silently take a default branch somewhere
-        if (!Enum.IsDefined(Precision)) throw new ArgumentException($"Unknown Precision {(int)Precision}.");
-        if (!Enum.IsDefined(Activation)) throw new ArgumentException($"Unknown Activation {(int)Activation}.");
-        if (!Enum.IsDefined(HiddenActivation)) throw new ArgumentException($"Unknown HiddenActivation {(int)HiddenActivation}.");
-        if (FeatureCount <= 0) throw new ArgumentException("FeatureCount must be > 0.");
-        if (AccumulatorSize <= 0 || AccumulatorSize % 32 != 0) throw new ArgumentException("AccumulatorSize must be a positive multiple of 32.");
-        if (Slots is < 1 or > 64) throw new ArgumentException("Slots must be in [1, 64].");
-        if (Activation == FeatureTransformerActivation.Pairwise && AccumulatorSize % 64 != 0) throw new ArgumentException("Pairwise activation needs AccumulatorSize to be a multiple of 64.");
-        if (OutputScale <= 0) throw new ArgumentException("OutputScale must be > 0.");
-        if ((long)FeatureCount * AccumulatorSize > int.MaxValue / 2) throw new ArgumentException("Feature transformer too large.");
-        if (OutputBuckets is < 1 or > 256) throw new ArgumentException("OutputBuckets must be in [1, 256].");
+        if (!Enum.IsDefined(Precision))
+            throw new ArgumentException($"Unknown Precision {(int)Precision}.");
+        if (!Enum.IsDefined(Activation))
+            throw new ArgumentException($"Unknown Activation {(int)Activation}.");
+        if (!Enum.IsDefined(HiddenActivation))
+            throw new ArgumentException($"Unknown HiddenActivation {(int)HiddenActivation}.");
+        if (FeatureCount <= 0)
+            throw new ArgumentException("FeatureCount must be > 0.");
+        if (AccumulatorSize <= 0 || AccumulatorSize % 32 != 0)
+            throw new ArgumentException("AccumulatorSize must be a positive multiple of 32.");
+        if (Slots is < 1 or > 64)
+            throw new ArgumentException("Slots must be in [1, 64].");
+        if (Activation == FeatureTransformerActivation.Pairwise && AccumulatorSize % 64 != 0)
+            throw new ArgumentException("Pairwise activation needs AccumulatorSize to be a multiple of 64.");
+        if (OutputScale <= 0)
+            throw new ArgumentException("OutputScale must be > 0.");
+        if ((long)FeatureCount * AccumulatorSize > int.MaxValue / 2)
+            throw new ArgumentException("Feature transformer too large.");
+        if (OutputBuckets is < 1 or > 256)
+            throw new ArgumentException("OutputBuckets must be in [1, 256].");
 
         int slotOut = Activation == FeatureTransformerActivation.Pairwise ? AccumulatorSize / 2 : AccumulatorSize;
         int ftOut = Slots * slotOut;
-        if (ftOut > 16384) throw new ArgumentException("Slots * (accumulator output size) must not exceed 16384.");
+        if (ftOut > 16384)
+            throw new ArgumentException("Slots * (accumulator output size) must not exceed 16384.");
 
         if (Precision == NetworkPrecision.Int16)
         {
-            if (HiddenLayerSizes.Length != 0) throw new ArgumentException("Hidden dense layers need Precision = Int8.");
-            if (Activation == FeatureTransformerActivation.Pairwise) throw new ArgumentException("Pairwise activation needs Precision = Int8.");
+            if (HiddenLayerSizes.Length != 0)
+                throw new ArgumentException("Hidden dense layers need Precision = Int8.");
+            if (Activation == FeatureTransformerActivation.Pairwise)
+                throw new ArgumentException("Pairwise activation needs Precision = Int8.");
             if (HiddenActivation != HiddenActivation.ClippedReLU || DenseConnections || SkipConnection)
                 throw new ArgumentException("Hidden activation, dense connections and skip connection need Precision = Int8.");
-            if (ActivationQuantization is < 1 or > 255) throw new ArgumentException("ActivationQuantization must be in [1, 255].");
-            if (OutputWeightQuantization is < 1 or > 1024) throw new ArgumentException("OutputWeightQuantization must be in [1, 1024].");
+            if (ActivationQuantization is < 1 or > 255)
+                throw new ArgumentException("ActivationQuantization must be in [1, 255].");
+            if (OutputWeightQuantization is < 1 or > 1024)
+                throw new ArgumentException("OutputWeightQuantization must be in [1, 1024].");
             if (Activation == FeatureTransformerActivation.SquaredClippedReLU && 32767 / ActivationQuantization / (double)OutputWeightQuantization < 0.25)
                 throw new ArgumentException("SquaredClippedReLU needs a smaller OutputWeightQuantization (default 64): the int16 product c*w limits |w_int| to 32767/ActivationQuantization.");
         }
         else
         {
-            if (ActivationQuantization != DefaultActivationQuantization) throw new ArgumentException($"Int8 + {Activation} requires ActivationQuantization = {DefaultActivationQuantization}.");
+            if (ActivationQuantization != DefaultActivationQuantization)
+                throw new ArgumentException($"Int8 + {Activation} requires ActivationQuantization = {DefaultActivationQuantization}.");
             foreach (int n in HiddenLayerSizes)
-                if (n <= 0 || n % 16 != 0 || n > MaxHiddenLayerSize) throw new ArgumentException($"Hidden layer sizes must be positive multiples of 16, at most {MaxHiddenLayerSize}.");
-            if (HiddenLayerSizes.Length > 64) throw new ArgumentException("At most 64 hidden layers.");
+                if (n <= 0 || n % 16 != 0 || n > MaxHiddenLayerSize)
+                    throw new ArgumentException($"Hidden layer sizes must be positive multiples of 16, at most {MaxHiddenLayerSize}.");
+            if (HiddenLayerSizes.Length > 64)
+                throw new ArgumentException("At most 64 hidden layers.");
             long activationBytes = 0;
-            foreach (int n in HiddenLayerSizes) activationBytes += HiddenActivation == HiddenActivation.SqrClippedReLU ? 2L * n : n;
+            foreach (int n in HiddenLayerSizes)
+                activationBytes += HiddenActivation == HiddenActivation.SqrClippedReLU ? 2L * n : n;
             if (activationBytes > MaxTotalHiddenActivations)
                 throw new ArgumentException($"The hidden layers produce {activationBytes} activations, at most {MaxTotalHiddenActivations} are supported (an evaluation keeps them on the stack).");
-            if (ftOut % 64 != 0) throw new ArgumentException("Int8: Slots * (accumulator output size) must be a multiple of 64 (sparse input kernels).");
-            if (SkipConnection && (HiddenLayerSizes.Length < 1 || HiddenLayerSizes[0] < 2)) throw new ArgumentException("SkipConnection needs a first hidden layer with at least 2 outputs.");
+            if (ftOut % 64 != 0)
+                throw new ArgumentException("Int8: Slots * (accumulator output size) must be a multiple of 64 (sparse input kernels).");
+            if (SkipConnection && (HiddenLayerSizes.Length < 1 || HiddenLayerSizes[0] < 2))
+                throw new ArgumentException("SkipConnection needs a first hidden layer with at least 2 outputs.");
         }
     }
 
@@ -172,27 +199,53 @@ public sealed record NetworkSpec
     /// <summary>Writes the spec in the binary form used inside model and checkpoint files.</summary>
     public void Write(BinaryWriter w)
     {
-        w.Write(FeatureCount); w.Write(AccumulatorSize); w.Write(Slots);
-        w.Write((int)Precision); w.Write((int)Activation); w.Write((int)HiddenActivation);
-        w.Write(DenseConnections); w.Write(SkipConnection);
-        w.Write(OutputBuckets); w.Write(ActivationQuantization); w.Write(OutputWeightQuantization); w.Write(OutputScale);
-        w.Write(HiddenLayerSizes.Length); foreach (int n in HiddenLayerSizes) w.Write(n);
+        w.Write(FeatureCount);
+        w.Write(AccumulatorSize);
+        w.Write(Slots);
+        w.Write((int)Precision);
+        w.Write((int)Activation);
+        w.Write((int)HiddenActivation);
+        w.Write(DenseConnections);
+        w.Write(SkipConnection);
+        w.Write(OutputBuckets);
+        w.Write(ActivationQuantization);
+        w.Write(OutputWeightQuantization);
+        w.Write(OutputScale);
+        w.Write(HiddenLayerSizes.Length);
+        foreach (int n in HiddenLayerSizes)
+            w.Write(n);
     }
 
     /// <summary>Reads a spec written by <see cref="Write"/> and validates it.</summary>
     public static NetworkSpec Read(BinaryReader r)
     {
         int features = r.ReadInt32(), h = r.ReadInt32(), slots = r.ReadInt32();
-        var precision = (NetworkPrecision)r.ReadInt32(); var act = (FeatureTransformerActivation)r.ReadInt32(); var hidden = (HiddenActivation)r.ReadInt32();
+        NetworkPrecision precision = (NetworkPrecision)r.ReadInt32();
+        FeatureTransformerActivation act = (FeatureTransformerActivation)r.ReadInt32();
+        HiddenActivation hidden = (HiddenActivation)r.ReadInt32();
         bool dense = r.ReadBoolean(), skip = r.ReadBoolean();
         int buckets = r.ReadInt32(), qa = r.ReadInt32(), qb = r.ReadInt32(), scale = r.ReadInt32();
         int count = r.ReadInt32();
-        if (count < 0 || count > 64) throw new InvalidDataException("Bad layer count.");
-        var layers = new int[count]; for (int i = 0; i < count; i++) layers[i] = r.ReadInt32();
-        var spec = new NetworkSpec
+        if (count is < 0 or > 64)
+            throw new InvalidDataException("Bad layer count.");
+        int[] layers = new int[count];
+        for (int i = 0; i < count; i++)
+            layers[i] = r.ReadInt32();
+        NetworkSpec spec = new()
         {
-            FeatureCount = features, AccumulatorSize = h, Slots = slots, Precision = precision, Activation = act, HiddenActivation = hidden,
-            DenseConnections = dense, SkipConnection = skip, OutputBuckets = buckets, ActivationQuantization = qa, OutputWeightQuantization = qb, OutputScale = scale, HiddenLayerSizes = [.. layers],
+            FeatureCount = features,
+            AccumulatorSize = h,
+            Slots = slots,
+            Precision = precision,
+            Activation = act,
+            HiddenActivation = hidden,
+            DenseConnections = dense,
+            SkipConnection = skip,
+            OutputBuckets = buckets,
+            ActivationQuantization = qa,
+            OutputWeightQuantization = qb,
+            OutputScale = scale,
+            HiddenLayerSizes = [.. layers],
         };
         spec.Validate();
         return spec;
@@ -210,10 +263,21 @@ public sealed record NetworkSpec
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = new HashCode();
-        hash.Add(FeatureCount); hash.Add(AccumulatorSize); hash.Add(Slots); hash.Add(Precision); hash.Add(Activation); hash.Add(HiddenActivation);
-        foreach (int size in HiddenLayerSizes) hash.Add(size);
-        hash.Add(DenseConnections); hash.Add(SkipConnection); hash.Add(OutputBuckets); hash.Add(ActivationQuantization); hash.Add(OutputWeightQuantization); hash.Add(OutputScale);
+        HashCode hash = new();
+        hash.Add(FeatureCount);
+        hash.Add(AccumulatorSize);
+        hash.Add(Slots);
+        hash.Add(Precision);
+        hash.Add(Activation);
+        hash.Add(HiddenActivation);
+        foreach (int size in HiddenLayerSizes)
+            hash.Add(size);
+        hash.Add(DenseConnections);
+        hash.Add(SkipConnection);
+        hash.Add(OutputBuckets);
+        hash.Add(ActivationQuantization);
+        hash.Add(OutputWeightQuantization);
+        hash.Add(OutputScale);
         return hash.ToHashCode();
     }
 

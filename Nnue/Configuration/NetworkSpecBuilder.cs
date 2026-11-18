@@ -20,7 +20,7 @@ public sealed class NetworkSpecBuilder
 
     private readonly int _featureCount;
 
-    internal NetworkSpecBuilder(int featureCount) { _featureCount = featureCount; }
+    internal NetworkSpecBuilder(int featureCount) => _featureCount = featureCount;
 
     /// <summary>Number of values per accumulator (a multiple of 32; of 64 for pairwise activation).</summary>
     public NetworkSpecBuilder WithAccumulatorSize(int accumulatorSize) { _accumulatorSize = accumulatorSize; return this; }
@@ -37,15 +37,20 @@ public sealed class NetworkSpecBuilder
     /// <summary>Single int16 output layer (no hidden layers).</summary>
     public NetworkSpecBuilder WithInt16(FeatureTransformerActivation activation = FeatureTransformerActivation.ClippedReLU)
     {
-        _precision = NetworkPrecision.Int16; _activation = activation; _hiddenLayerSizes = [];
-        _hiddenActivation = HiddenActivation.ClippedReLU; _denseConnections = _skipConnection = false;
+        _precision = NetworkPrecision.Int16;
+        _activation = activation;
+        _hiddenLayerSizes = [];
+        _hiddenActivation = HiddenActivation.ClippedReLU;
+        _denseConnections = _skipConnection = false;
         return this;
     }
 
     /// <summary>Stockfish arithmetic with the given hidden dense layer sizes (multiples of 16; may be empty for a single int8 output layer).</summary>
     public NetworkSpecBuilder WithInt8(FeatureTransformerActivation activation, ReadOnlySpan<int> hiddenLayerSizes)
     {
-        _precision = NetworkPrecision.Int8; _activation = activation; _hiddenLayerSizes = [.. hiddenLayerSizes];
+        _precision = NetworkPrecision.Int8;
+        _activation = activation;
+        _hiddenLayerSizes = [.. hiddenLayerSizes];
         return this;
     }
 
@@ -61,21 +66,33 @@ public sealed class NetworkSpecBuilder
     /// <summary>Overrides the default quantization scales (only needed to import externally trained weights).</summary>
     public NetworkSpecBuilder WithQuantization(int activationQuantization, int outputWeightQuantization)
     {
-        _activationQuantization = activationQuantization; _outputWeightQuantization = outputWeightQuantization; return this;
+        _activationQuantization = activationQuantization;
+        _outputWeightQuantization = outputWeightQuantization;
+        return this;
     }
 
     /// <summary>Creates the spec and validates it.</summary>
     /// <exception cref="ArgumentException">The options do not form a supported network.</exception>
     public NetworkSpec Build()
     {
-        var spec = new NetworkSpec
+        NetworkSpec spec = new()
         {
-            FeatureCount = _featureCount, AccumulatorSize = _accumulatorSize, Slots = _slots, Precision = _precision, Activation = _activation,
-            HiddenLayerSizes = _hiddenLayerSizes, HiddenActivation = _hiddenActivation, DenseConnections = _denseConnections, SkipConnection = _skipConnection,
-            OutputBuckets = _outputBuckets, OutputScale = _outputScale,
+            FeatureCount = _featureCount,
+            AccumulatorSize = _accumulatorSize,
+            Slots = _slots,
+            Precision = _precision,
+            Activation = _activation,
+            HiddenLayerSizes = _hiddenLayerSizes,
+            HiddenActivation = _hiddenActivation,
+            DenseConnections = _denseConnections,
+            SkipConnection = _skipConnection,
+            OutputBuckets = _outputBuckets,
+            OutputScale = _outputScale,
         };
-        if (_activationQuantization is { } qa) spec = spec with { ActivationQuantization = qa };
-        if (_outputWeightQuantization is { } qb) spec = spec with { OutputWeightQuantization = qb };
+        if (_activationQuantization is { } qa)
+            spec = spec with { ActivationQuantization = qa };
+        if (_outputWeightQuantization is { } qb)
+            spec = spec with { OutputWeightQuantization = qb };
         spec.Validate();
         return spec;
     }

@@ -1,6 +1,3 @@
-using System.Numerics;
-using System.Runtime.InteropServices;
-
 namespace Nnue.Training.Optimization;
 /// <summary>
 /// One training sample. The library does not know what the features mean: <see cref="Features"/> has one feature list per slot of the

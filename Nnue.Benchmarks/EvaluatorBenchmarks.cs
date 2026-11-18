@@ -35,18 +35,19 @@ public class EvaluatorBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        var random = new Random(12);
+        Random random = new(12);
         bool int16 = Scenario.StartsWith("Int16");
         int size = int.Parse(Scenario.Split("H=")[1].Split(' ')[0]);
         bool sparse = Scenario.EndsWith("sparse");
-        var spec = int16
+        NetworkSpec spec = int16
             ? new NetworkSpec { FeatureCount = 768, AccumulatorSize = size, Slots = 2, OutputBuckets = 4 }
             : NetworkSpec.CreateStockfishLike(768, size, 32, 32, 8);
         _buckets = spec.OutputBuckets;
         _model = BenchmarkData.CreateRandomModel(spec, random);
         _evaluator = new NnueEvaluator(_model, Backend);
         _accumulators = _model.CreateAccumulators(2);
-        _first = _accumulators[0]; _second = _accumulators[1];
+        _first = _accumulators[0];
+        _second = _accumulators[1];
         (int low, int high) = sparse ? (-1200, 300) : (-300, 700);
         BenchmarkData.Fill(_first, random, low, high);
         BenchmarkData.Fill(_second, random, low, high);

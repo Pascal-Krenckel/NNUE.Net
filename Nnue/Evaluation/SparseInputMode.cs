@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace Nnue.Evaluation;
 /// <summary>How the first dense layer of an Int8 network treats zero chunks in its input.</summary>
 public enum SparseInputMode

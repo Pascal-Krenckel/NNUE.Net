@@ -2,7 +2,6 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
-using System.Runtime.Intrinsics.X86;
 
 namespace Nnue.Kernels;
 
@@ -27,20 +26,20 @@ internal static unsafe class NeonKernels
         int stride = paddedOutputLength * 4;
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector128.LoadAligned(biases + ((long)o));
-            var a1 = Vector128.LoadAligned(biases + ((long)o + 4));
-            var a2 = Vector128.LoadAligned(biases + ((long)o + 8));
-            var a3 = Vector128.LoadAligned(biases + ((long)o + 12));
-            sbyte* wp = (weights + (o * 4));
+            Vector128<int> a0 = Vector128.LoadAligned(biases + ((long)o));
+            Vector128<int> a1 = Vector128.LoadAligned(biases + ((long)o + 4));
+            Vector128<int> a2 = Vector128.LoadAligned(biases + ((long)o + 8));
+            Vector128<int> a3 = Vector128.LoadAligned(biases + ((long)o + 12));
+            sbyte* wp = weights + (o * 4);
             for (int i = 0; i < inputLength; i += 4)
             {
-                var x = Vector128.Create(Unsafe.ReadUnaligned<int>((input + (i)))).AsSByte();
-                var xl = x.GetLower();
-                sbyte* wc = (wp + ((i >> 2) * stride));
+                Vector128<sbyte> x = Vector128.Create(Unsafe.ReadUnaligned<int>(input + i)).AsSByte();
+                Vector64<sbyte> xl = x.GetLower();
+                sbyte* wc = wp + ((i >> 2) * stride);
                 a0 = MultiplyAccumulateNeon(a0, Vector128.LoadAligned(wc), x, xl);
-                a1 = MultiplyAccumulateNeon(a1, Vector128.LoadAligned(wc + (16)), x, xl);
-                a2 = MultiplyAccumulateNeon(a2, Vector128.LoadAligned(wc + (32)), x, xl);
-                a3 = MultiplyAccumulateNeon(a3, Vector128.LoadAligned(wc + (48)), x, xl);
+                a1 = MultiplyAccumulateNeon(a1, Vector128.LoadAligned(wc + 16), x, xl);
+                a2 = MultiplyAccumulateNeon(a2, Vector128.LoadAligned(wc + 32), x, xl);
+                a3 = MultiplyAccumulateNeon(a3, Vector128.LoadAligned(wc + 48), x, xl);
             }
             a0.StoreAligned(output + ((long)o));
             a1.StoreAligned(output + ((long)o + 4));
@@ -56,19 +55,19 @@ internal static unsafe class NeonKernels
         int stride = paddedOutputLength * 4;
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector128.LoadAligned(biases + ((long)o));
-            var a1 = Vector128.LoadAligned(biases + ((long)o + 4));
-            var a2 = Vector128.LoadAligned(biases + ((long)o + 8));
-            var a3 = Vector128.LoadAligned(biases + ((long)o + 12));
-            sbyte* wp = (weights + (o * 4));
+            Vector128<int> a0 = Vector128.LoadAligned(biases + ((long)o));
+            Vector128<int> a1 = Vector128.LoadAligned(biases + ((long)o + 4));
+            Vector128<int> a2 = Vector128.LoadAligned(biases + ((long)o + 8));
+            Vector128<int> a3 = Vector128.LoadAligned(biases + ((long)o + 12));
+            sbyte* wp = weights + (o * 4);
             for (int i = 0; i < inputLength; i += 4)
             {
-                var x = Vector128.Create(Unsafe.ReadUnaligned<int>((input + (i)))).AsSByte();
-                sbyte* wc = (wp + ((i >> 2) * stride));
+                Vector128<sbyte> x = Vector128.Create(Unsafe.ReadUnaligned<int>(input + i)).AsSByte();
+                sbyte* wc = wp + ((i >> 2) * stride);
                 a0 = Dp.DotProduct(a0, Vector128.LoadAligned(wc), x);
-                a1 = Dp.DotProduct(a1, Vector128.LoadAligned(wc + (16)), x);
-                a2 = Dp.DotProduct(a2, Vector128.LoadAligned(wc + (32)), x);
-                a3 = Dp.DotProduct(a3, Vector128.LoadAligned(wc + (48)), x);
+                a1 = Dp.DotProduct(a1, Vector128.LoadAligned(wc + 16), x);
+                a2 = Dp.DotProduct(a2, Vector128.LoadAligned(wc + 32), x);
+                a3 = Dp.DotProduct(a3, Vector128.LoadAligned(wc + 48), x);
             }
             a0.StoreAligned(output + ((long)o));
             a1.StoreAligned(output + ((long)o + 4));
@@ -83,21 +82,21 @@ internal static unsafe class NeonKernels
         int stride = paddedOutputLength * 4;
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector128.LoadAligned(biases + ((long)o));
-            var a1 = Vector128.LoadAligned(biases + ((long)o + 4));
-            var a2 = Vector128.LoadAligned(biases + ((long)o + 8));
-            var a3 = Vector128.LoadAligned(biases + ((long)o + 12));
-            sbyte* wp = (weights + (o * 4));
+            Vector128<int> a0 = Vector128.LoadAligned(biases + ((long)o));
+            Vector128<int> a1 = Vector128.LoadAligned(biases + ((long)o + 4));
+            Vector128<int> a2 = Vector128.LoadAligned(biases + ((long)o + 8));
+            Vector128<int> a3 = Vector128.LoadAligned(biases + ((long)o + 12));
+            sbyte* wp = weights + (o * 4);
             for (int j = 0; j < nonZeroCount; j++)
             {
                 int c = nonZeroChunks[j];
-                var x = Vector128.Create(Unsafe.ReadUnaligned<int>((input + (c * 4)))).AsSByte();
-                var xl = x.GetLower();
-                sbyte* wc = (wp + (c * stride));
+                Vector128<sbyte> x = Vector128.Create(Unsafe.ReadUnaligned<int>(input + (c * 4))).AsSByte();
+                Vector64<sbyte> xl = x.GetLower();
+                sbyte* wc = wp + (c * stride);
                 a0 = MultiplyAccumulateNeon(a0, Vector128.LoadAligned(wc), x, xl);
-                a1 = MultiplyAccumulateNeon(a1, Vector128.LoadAligned(wc + (16)), x, xl);
-                a2 = MultiplyAccumulateNeon(a2, Vector128.LoadAligned(wc + (32)), x, xl);
-                a3 = MultiplyAccumulateNeon(a3, Vector128.LoadAligned(wc + (48)), x, xl);
+                a1 = MultiplyAccumulateNeon(a1, Vector128.LoadAligned(wc + 16), x, xl);
+                a2 = MultiplyAccumulateNeon(a2, Vector128.LoadAligned(wc + 32), x, xl);
+                a3 = MultiplyAccumulateNeon(a3, Vector128.LoadAligned(wc + 48), x, xl);
             }
             a0.StoreAligned(output + ((long)o));
             a1.StoreAligned(output + ((long)o + 4));
@@ -112,20 +111,20 @@ internal static unsafe class NeonKernels
         int stride = paddedOutputLength * 4;
         for (int o = 0; o < paddedOutputLength; o += 16)
         {
-            var a0 = Vector128.LoadAligned(biases + ((long)o));
-            var a1 = Vector128.LoadAligned(biases + ((long)o + 4));
-            var a2 = Vector128.LoadAligned(biases + ((long)o + 8));
-            var a3 = Vector128.LoadAligned(biases + ((long)o + 12));
-            sbyte* wp = (weights + (o * 4));
+            Vector128<int> a0 = Vector128.LoadAligned(biases + ((long)o));
+            Vector128<int> a1 = Vector128.LoadAligned(biases + ((long)o + 4));
+            Vector128<int> a2 = Vector128.LoadAligned(biases + ((long)o + 8));
+            Vector128<int> a3 = Vector128.LoadAligned(biases + ((long)o + 12));
+            sbyte* wp = weights + (o * 4);
             for (int j = 0; j < nonZeroCount; j++)
             {
                 int c = nonZeroChunks[j];
-                var x = Vector128.Create(Unsafe.ReadUnaligned<int>((input + (c * 4)))).AsSByte();
-                sbyte* wc = (wp + (c * stride));
+                Vector128<sbyte> x = Vector128.Create(Unsafe.ReadUnaligned<int>(input + (c * 4))).AsSByte();
+                sbyte* wc = wp + (c * stride);
                 a0 = Dp.DotProduct(a0, Vector128.LoadAligned(wc), x);
-                a1 = Dp.DotProduct(a1, Vector128.LoadAligned(wc + (16)), x);
-                a2 = Dp.DotProduct(a2, Vector128.LoadAligned(wc + (32)), x);
-                a3 = Dp.DotProduct(a3, Vector128.LoadAligned(wc + (48)), x);
+                a1 = Dp.DotProduct(a1, Vector128.LoadAligned(wc + 16), x);
+                a2 = Dp.DotProduct(a2, Vector128.LoadAligned(wc + 32), x);
+                a3 = Dp.DotProduct(a3, Vector128.LoadAligned(wc + 48), x);
             }
             a0.StoreAligned(output + ((long)o));
             a1.StoreAligned(output + ((long)o + 4));
@@ -140,16 +139,17 @@ internal static unsafe class NeonKernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int DotProductCReLU(short** accumulators, short* weights, int accumulatorCount, int accumulatorSize, short clipMax)
     {
-        var zero = Vector128<short>.Zero; var max = Vector128.Create(clipMax);
-        var s0 = Vector128<int>.Zero;
+        Vector128<short> zero = Vector128<short>.Zero;
+        Vector128<short> max = Vector128.Create(clipMax);
+        Vector128<int> s0 = Vector128<int>.Zero;
         for (int s = 0; s < accumulatorCount; s++)
         {
             short* a = accumulators[s];
-            short* ws = (weights + ((long)s * accumulatorSize));
-            for (long i = 0; i < (long)accumulatorSize; i += 8)
+            short* ws = weights + ((long)s * accumulatorSize);
+            for (long i = 0; i < accumulatorSize; i += 8)
             {
-                var x = Vector128.Min(Vector128.Max(Vector128.LoadAligned(a + (i)), zero), max);
-                var wv = Vector128.LoadAligned(ws + (i));
+                Vector128<short> x = Vector128.Min(Vector128.Max(Vector128.LoadAligned(a + i), zero), max);
+                Vector128<short> wv = Vector128.LoadAligned(ws + i);
                 s0 = AdvSimd.MultiplyWideningUpperAndAdd(AdvSimd.MultiplyWideningLowerAndAdd(s0, x.GetLower(), wv.GetLower()), x, wv);
             }
         }
@@ -160,16 +160,17 @@ internal static unsafe class NeonKernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int DotProductSCReLU(short** accumulators, short* weights, int accumulatorCount, int accumulatorSize, short clipMax)
     {
-        var zero = Vector128<short>.Zero; var max = Vector128.Create(clipMax);
-        var s0 = Vector128<int>.Zero;
+        Vector128<short> zero = Vector128<short>.Zero;
+        Vector128<short> max = Vector128.Create(clipMax);
+        Vector128<int> s0 = Vector128<int>.Zero;
         for (int s = 0; s < accumulatorCount; s++)
         {
             short* a = accumulators[s];
-            short* ws = (weights + ((long)s * accumulatorSize));
-            for (long i = 0; i < (long)accumulatorSize; i += 8)
+            short* ws = weights + ((long)s * accumulatorSize);
+            for (long i = 0; i < accumulatorSize; i += 8)
             {
-                var x = Vector128.Min(Vector128.Max(Vector128.LoadAligned(a + (i)), zero), max);
-                var t = x * Vector128.LoadAligned(ws + (i));                 // mul: low 16 bits, as in the scalar reference
+                Vector128<short> x = Vector128.Min(Vector128.Max(Vector128.LoadAligned(a + i), zero), max);
+                Vector128<short> t = x * Vector128.LoadAligned(ws + i);                 // mul: low 16 bits, as in the scalar reference
                 s0 = AdvSimd.MultiplyWideningUpperAndAdd(AdvSimd.MultiplyWideningLowerAndAdd(s0, t.GetLower(), x.GetLower()), t, x);
             }
         }
@@ -181,10 +182,10 @@ internal static unsafe class NeonKernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int AffineTransformSingleOutput(byte* input, sbyte* weights, int bias, int paddedInputLength)
     {
-        var a0 = Vector128<int>.Zero;
+        Vector128<int> a0 = Vector128<int>.Zero;
         for (int i = 0; i < paddedInputLength; i += 16)
         {
-            var x = Vector128.Load(input + i).AsSByte();
+            Vector128<sbyte> x = Vector128.Load(input + i).AsSByte();
             a0 = MultiplyAccumulateNeon(a0, Vector128.LoadAligned(weights + i), x, x.GetLower());
         }
         return bias + Vector128.Sum(a0);
@@ -193,7 +194,8 @@ internal static unsafe class NeonKernels
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int AffineTransformSingleOutputDotProd(byte* input, sbyte* weights, int bias, int paddedInputLength)
     {
-        var a0 = Vector128<int>.Zero; var a1 = Vector128<int>.Zero;
+        Vector128<int> a0 = Vector128<int>.Zero;
+        Vector128<int> a1 = Vector128<int>.Zero;
         for (int i = 0; i < paddedInputLength; i += 32)
         {
             a0 = Dp.DotProduct(a0, Vector128.LoadAligned(weights + i), Vector128.Load(input + i).AsSByte());

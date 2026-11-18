@@ -67,13 +67,13 @@ if (!candidate.TryValidate(out string? error)) Console.WriteLine(error);
 | Option | Values |
 |---|---|
 | `Precision` | `Int16`: one int16 output layer · `Int8`: Stockfish arithmetic, any number of hidden layers |
-| `Activation` | `ClippedReLU` `clamp(a,0,1)` · `SquaredClippedReLU` `clamp(a,0,1)²` · `Pairwise` `clamp(a)·clamp(b)` of the two halves of an accumulator (Int8 only) |
+| `Activation` | `ClippedReLU` `clamp(a,0,1)` · `SquaredClippedReLU` `clamp(a,0,1)²` · `Pairwise` `clamp(a)·clamp(b)`, `MaxPooling` `max(clamp(a), clamp(b))` and `AveragePooling` `(clamp(a)+clamp(b))/2` of the two halves of an accumulator (the last three Int8 only) |
 | `HiddenLayerSizes` | sizes of the hidden layers (Int8, multiples of 16, at most 4096 each) |
-| `HiddenActivation` | `ClippedReLU` or Stockfish's `SqrClippedReLU`, which concatenates `[sqr(z) \| clip(z)]` |
+| `HiddenActivation` | `ClippedReLU`, Stockfish's `SqrClippedReLU` (concatenates `[sqr(z) \| clip(z)]`) or `Quantmoid4`, an integer approximation of `sigmoid(4z)` |
 | `DenseConnections` | later layers see the activations of all earlier hidden layers |
 | `SkipConnection` | `output += z0[n-2] - z0[n-1]` of the first hidden layer |
 | `OutputBuckets` | number of independent layer stacks (1-256) |
-| `Slots`, `AccumulatorSize` | accumulators per evaluation (1-64) and their size (a multiple of 32; of 64 for pairwise) |
+| `Slots`, `AccumulatorSize` | accumulators per evaluation (1-64) and their size (a multiple of 32; of 64 for pairwise and pooling) |
 | `ActivationQuantization`, `OutputWeightQuantization`, `OutputScale` | integer scales; the defaults fit networks trained by this library |
 
 `NetworkSpec` is an immutable record with value equality: two specs are equal if they describe the same network.
@@ -191,6 +191,6 @@ size does not match the spec is rejected. The reader is tested against hand-writ
 ## Limits
 
 - Hidden layers have at most 4096 outputs, at most 64 hidden layers and 16384 hidden activations in total (an Int8 evaluation keeps
-  its scratch memory on the stack); `Slots * AccumulatorSize` (halved for pairwise) is at most 16384.
+  its scratch memory on the stack); `Slots * AccumulatorSize` (halved for pairwise and pooling) is at most 16384.
 - A model is at most 2 GB.
 - Weights filled by hand through `NnueModelBuilder` are not checked for overflow; the quantizer report covers trained networks.

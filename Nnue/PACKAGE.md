@@ -1,4 +1,4 @@
-# Nnue.Net
+# NNUE.Net
 
 A feature-agnostic NNUE library: evaluation, incremental updates, training, quantization and storage of *efficiently updatable
 neural networks*, the kind of network Stockfish uses. The library does not know what the features mean, so it works for any game

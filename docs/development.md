@@ -102,8 +102,8 @@ One-time setup:
 Releasing a version:
 
 ```
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 The tag name without the `v` becomes the package version (`v1.2.3-beta.1` → `1.2.3-beta.1`). The workflow can also be started by

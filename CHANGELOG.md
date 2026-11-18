@@ -1,8 +1,15 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 1.1.0
 
-First published version, package id `Nnue.Net`.
+- New feature transformer activations `MaxPooling` and `AveragePooling` (the two halves of an accumulator, Int8 only) and new hidden
+  activation `Quantmoid4` (integer approximation of `sigmoid(4x)`); supported by all backends, the float model, the trainer and the
+  quantizer. `NetworkSpecBuilder.WithQuantmoid4HiddenActivation()`.
+- Model files that use the new activations cannot be read by version 1.0.0.
+
+## 1.0.0
+
+First published version, package id `NNUE.Net`.
 
 - Evaluation with SIMD backends for AVX512-VNNI (net11.0), AVX-512, AVX-VNNI, AVX2, SSSE3, NEON with and without dot product, and a
   scalar reference; all bit-identical.

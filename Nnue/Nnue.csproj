@@ -17,7 +17,7 @@
     <PackageId>NNUE.Net</PackageId>
     <!-- TODO before the first release: <Authors>your name</Authors>, and optionally <PackageLicenseExpression>MIT</PackageLicenseExpression> (or another SPDX id)
          and <PackageProjectUrl>. The repository URL is filled in by source link from the git remote. -->
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Description>Feature-agnostic NNUE (efficiently updatable neural network) library: SIMD evaluation (AVX512-VNNI, AVX-512, AVX-VNNI, AVX2, SSSE3, NEON), incremental accumulator updates, Int16 and Stockfish-style Int8 networks, training, quantization, bullet import.</Description>
     <PackageTags>nnue;neural-network;simd;avx512;inference;training;quantization</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

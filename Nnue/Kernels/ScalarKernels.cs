@@ -66,6 +66,18 @@ internal static unsafe class ScalarKernels
         }
     }
 
+    internal static void ApplyMaxPooling(short* accumulator, byte* output, int halfLength)
+    {
+        for (int j = 0; j < halfLength; j++)
+            output[j] = (byte)Math.Max(Math.Clamp((int)accumulator[j], 0, 127), Math.Clamp((int)accumulator[j + halfLength], 0, 127));
+    }
+
+    internal static void ApplyAveragePooling(short* accumulator, byte* output, int halfLength)
+    {
+        for (int j = 0; j < halfLength; j++)
+            output[j] = (byte)((Math.Clamp((int)accumulator[j], 0, 127) + Math.Clamp((int)accumulator[j + halfLength], 0, 127) + 1) >> 1);
+    }
+
     internal static void AffineTransform(byte* input, sbyte* weights, int* biases, int* output, int inputLength, int paddedOutputLength)
     {
         for (int o = 0; o < paddedOutputLength; o++)
@@ -114,6 +126,18 @@ internal static unsafe class ScalarKernels
     {
         for (int i = 0; i < length; i++)
             destination[i] = (byte)Math.Clamp(source[i] >> 6, 0, 127);
+    }
+
+    /// <summary>Quantmoid4: x = z >> 6; v = 127 - min(|x|, 127); q = v*v >> 8; out = x &lt; 0 ? q : 126 - q.</summary>
+    internal static void ActivateQuantmoid4(int* source, byte* destination, int length)
+    {
+        for (int i = 0; i < length; i++)
+        {
+            int x = source[i] >> 6;
+            int v = 127 - Math.Min(Math.Abs(x), 127);
+            int q = (v * v) >> 8;
+            destination[i] = (byte)(x < 0 ? q : 126 - q);
+        }
     }
 
     internal static void ActivateSqrClippedReLU(int* source, byte* destination, int length)

@@ -54,6 +54,9 @@ public sealed class NetworkSpecBuilder
         return this;
     }
 
+    /// <summary>Uses <see cref="HiddenActivation.Quantmoid4"/> after every hidden layer (Int8 only).</summary>
+    public NetworkSpecBuilder WithQuantmoid4HiddenActivation() { _hiddenActivation = HiddenActivation.Quantmoid4; return this; }
+
     /// <summary>Stockfish's <c>[sqr(z) | clip(z)]</c> concatenation after every hidden layer instead of plain clipped ReLU (Int8 only).</summary>
     public NetworkSpecBuilder WithSqrClippedHiddenActivation() { _hiddenActivation = HiddenActivation.SqrClippedReLU; return this; }
 

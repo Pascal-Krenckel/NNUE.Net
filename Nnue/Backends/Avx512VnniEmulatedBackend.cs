@@ -16,6 +16,8 @@ internal readonly unsafe struct Avx512VnniEmulatedBackend : IBackend
     public static void ApplyCReLU(short* accumulator, byte* output, int length) => Avx512Kernels.ApplyCReLU(accumulator, output, length);
     public static void ApplySCReLU(short* accumulator, byte* output, int length) => Avx512Kernels.ApplySCReLU(accumulator, output, length);
     public static void ApplyPairwise(short* accumulator, byte* output, int halfLength) => Avx512Kernels.ApplyPairwise(accumulator, output, halfLength);
+    public static void ApplyMaxPooling(short* accumulator, byte* output, int halfLength) => Portable128Kernels.ApplyPooling(accumulator, output, halfLength, false);
+    public static void ApplyAveragePooling(short* accumulator, byte* output, int halfLength) => Portable128Kernels.ApplyPooling(accumulator, output, halfLength, true);
     public static void AffineTransform(byte* input, sbyte* weights, int* biases, int* output, int inputLength, int paddedOutputLength) => Avx512VnniKernels.AffineTransform<Avx512VnniKernels.Vnni512Model>(input, weights, biases, output, inputLength, paddedOutputLength);
     public static void AffineTransformSparse(byte* input, sbyte* weights, int* biases, int* nonZeroChunks, int nonZeroCount, int* output, int paddedOutputLength) => Avx512VnniKernels.AffineTransformSparse<Avx512VnniKernels.Vnni512Model>(input, weights, biases, nonZeroChunks, nonZeroCount, output, paddedOutputLength);
     public static int AffineTransformSingleOutput(byte* input, sbyte* weights, int bias, int paddedInputLength) => Avx512VnniKernels.AffineTransformSingleOutput<Avx512VnniKernels.Vnni512Model>(input, weights, bias, paddedInputLength);
@@ -23,4 +25,5 @@ internal readonly unsafe struct Avx512VnniEmulatedBackend : IBackend
     public static int FindNonZeroChunks(byte* input, int* nonZeroChunks, int inputLength) => Avx512Kernels.FindNonZeroChunks(input, nonZeroChunks, inputLength);
     public static void ActivateClippedReLU(int* source, byte* destination, int length) => Portable128Kernels.ActivateClippedReLU(source, destination, length);
     public static void ActivateSqrClippedReLU(int* source, byte* destination, int length) => SseKernels.ActivateSqrClippedReLU(source, destination, length);
+    public static void ActivateQuantmoid4(int* source, byte* destination, int length) => Portable128Kernels.ActivateQuantmoid4(source, destination, length);
 }

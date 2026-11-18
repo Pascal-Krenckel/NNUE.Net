@@ -168,6 +168,50 @@ internal static unsafe class Portable128Kernels
             Vector128.Narrow(PairProduct128(accumulator, i, len, zero, max), Vector128<ushort>.Zero).GetLower().Store(output + i);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static Vector128<ushort> Pool128(short* accumulator, long offset, long halfLength, Vector128<short> zero, Vector128<short> max, bool average)
+    {
+        var a = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (offset)), zero), max).AsUInt16();
+        var c = Vector128.Min(Vector128.Max(Vector128.LoadAligned(accumulator + (offset + halfLength)), zero), max).AsUInt16();
+        return average ? Vector128.ShiftRightLogical(a + c + Vector128<ushort>.One, 1) : Vector128.Max(a, c);
+    }
+
+    /// <summary>Max / average pooling of the two halves of an accumulator, both clamped to [0, 127] (halfLength % 32 == 0).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    internal static void ApplyPooling(short* accumulator, byte* output, int halfLength, bool average)
+    {
+        var zero = Vector128<short>.Zero; var max = Vector128.Create((short)127);
+        long i = 0, len = (long)halfLength;
+        for (; i + 16 <= len; i += 16)
+            Vector128.Narrow(Pool128(accumulator, i, len, zero, max, average), Pool128(accumulator, i + 8, len, zero, max, average)).Store(output + (i));
+        if (i < len)
+            Vector128.Narrow(Pool128(accumulator, i, len, zero, max, average), Vector128<ushort>.Zero).GetLower().Store(output + (i));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static Vector128<int> Quantmoid4Lane(Vector128<int> z, Vector128<int> v127, Vector128<int> v126)
+    {
+        var x = Vector128.ShiftRightArithmetic(z, 6);
+        var v = v127 - Vector128.Min(Vector128.Abs(x), v127);
+        var q = Vector128.ShiftRightArithmetic(v * v, 8);
+        return Vector128.ConditionalSelect(Vector128.LessThan(x, Vector128<int>.Zero), q, v126 - q);
+    }
+
+    /// <summary>Quantmoid4 hidden activation (see <see cref="ScalarKernels.ActivateQuantmoid4"/>), n % 16 == 0.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    internal static void ActivateQuantmoid4(int* source, byte* destination, int length)
+    {
+        var v127 = Vector128.Create(127); var v126 = Vector128.Create(126);
+        for (long i = 0; i < (long)length; i += 16)
+        {
+            var a = Quantmoid4Lane(Vector128.LoadAligned(source + (i)), v127, v126);
+            var c = Quantmoid4Lane(Vector128.LoadAligned(source + (i + 4)), v127, v126);
+            var d = Quantmoid4Lane(Vector128.LoadAligned(source + (i + 8)), v127, v126);
+            var e = Quantmoid4Lane(Vector128.LoadAligned(source + (i + 12)), v127, v126);
+            Vector128.Narrow(Vector128.Narrow(a, c).AsUInt16(), Vector128.Narrow(d, e).AsUInt16()).Store(destination + (i));
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static void ApplySCReLU(short* accumulator, byte* output, int length)
     {

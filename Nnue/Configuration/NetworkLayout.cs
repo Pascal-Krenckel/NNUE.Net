@@ -52,7 +52,7 @@ internal sealed class NetworkLayout
         FeatureCount = spec.FeatureCount;
         AccumulatorSize = spec.AccumulatorSize;
         Slots = spec.Slots;
-        SlotOutputSize = spec.Activation == FeatureTransformerActivation.Pairwise ? AccumulatorSize / 2 : AccumulatorSize;
+        SlotOutputSize = spec.HalvesAccumulator ? AccumulatorSize / 2 : AccumulatorSize;
         FeatureTransformerOutputSize = Slots * SlotOutputSize;
 
         int mult = spec.HiddenActivation == HiddenActivation.SqrClippedReLU ? 2 : 1;

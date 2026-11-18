@@ -8,7 +8,8 @@ internal sealed unsafe class EvaluationContext
     public NnueModel Model = null!;
     public short* FeatureWeights, FeatureBias;
     public int AccumulatorSize, SlotCount, FeatureCount, TransformerOutputSize, ChunkCount, TotalActivationSize, MaxPaddedOutputLength, LayerCount, BucketCount, ClipMax, OutputWeightsStride;
-    public bool IsInt8, UsesSqrHidden, HasSkipConnection;
+    public bool IsInt8, HasSkipConnection;
+    public HiddenActivation HiddenActivation;
     public FeatureTransformerActivation Activation;
     public Step* Steps;
     public short* OutputWeights;

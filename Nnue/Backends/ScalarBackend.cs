@@ -16,6 +16,8 @@ internal readonly unsafe struct ScalarBackend : IBackend
     public static void ApplyCReLU(short* accumulator, byte* output, int length) => ScalarKernels.ApplyCReLU(accumulator, output, length);
     public static void ApplySCReLU(short* accumulator, byte* output, int length) => ScalarKernels.ApplySCReLU(accumulator, output, length);
     public static void ApplyPairwise(short* accumulator, byte* output, int halfLength) => ScalarKernels.ApplyPairwise(accumulator, output, halfLength);
+    public static void ApplyMaxPooling(short* accumulator, byte* output, int halfLength) => ScalarKernels.ApplyMaxPooling(accumulator, output, halfLength);
+    public static void ApplyAveragePooling(short* accumulator, byte* output, int halfLength) => ScalarKernels.ApplyAveragePooling(accumulator, output, halfLength);
     public static void AffineTransform(byte* input, sbyte* weights, int* biases, int* output, int inputLength, int paddedOutputLength) => ScalarKernels.AffineTransform(input, weights, biases, output, inputLength, paddedOutputLength);
     public static void AffineTransformSparse(byte* input, sbyte* weights, int* biases, int* nonZeroChunks, int nonZeroCount, int* output, int paddedOutputLength) => ScalarKernels.AffineTransformSparse(input, weights, biases, nonZeroChunks, nonZeroCount, output, paddedOutputLength);
     public static int AffineTransformSingleOutput(byte* input, sbyte* weights, int bias, int paddedInputLength) => ScalarKernels.AffineTransformSingleOutput(input, weights, bias, paddedInputLength);
@@ -23,4 +25,5 @@ internal readonly unsafe struct ScalarBackend : IBackend
     public static int FindNonZeroChunks(byte* input, int* nonZeroChunks, int inputLength) => ScalarKernels.FindNonZeroChunks(input, nonZeroChunks, inputLength);
     public static void ActivateClippedReLU(int* source, byte* destination, int length) => ScalarKernels.ActivateClippedReLU(source, destination, length);
     public static void ActivateSqrClippedReLU(int* source, byte* destination, int length) => ScalarKernels.ActivateSqrClippedReLU(source, destination, length);
+    public static void ActivateQuantmoid4(int* source, byte* destination, int length) => ScalarKernels.ActivateQuantmoid4(source, destination, length);
 }

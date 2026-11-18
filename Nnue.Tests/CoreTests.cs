@@ -39,6 +39,12 @@ public sealed unsafe class CoreTests
         yield return ("Int8 Pairwise K=1 32-32", I8(128, 1, FeatureTransformerActivation.Pairwise, [32, 32]));
         yield return ("Int8 Pairwise K=2 SqrClippedReLU dense skip", I8(128, 2, FeatureTransformerActivation.Pairwise, [32, 32], HiddenActivation.SqrClippedReLU, true, true));
         yield return ("Int8 Pairwise K=3 H=128 16", I8(128, 3, FeatureTransformerActivation.Pairwise, [16]));
+        yield return ("Int8 MaxPooling K=1 H=128 32-16", I8(128, 1, FeatureTransformerActivation.MaxPooling, [32, 16]));
+        yield return ("Int8 MaxPooling K=2 H=192 Quantmoid4 dense skip", I8(192, 2, FeatureTransformerActivation.MaxPooling, [16, 32], HiddenActivation.Quantmoid4, true, true));
+        yield return ("Int8 AveragePooling K=3 H=128 16", I8(128, 3, FeatureTransformerActivation.AveragePooling, [16]));
+        yield return ("Int8 AveragePooling K=1 H=128 no hidden", I8(128, 1, FeatureTransformerActivation.AveragePooling, []));
+        yield return ("Int8 CReLU K=2 Quantmoid4 16x3, 4 buckets", I8(64, 2, FeatureTransformerActivation.ClippedReLU, [16, 16, 16], HiddenActivation.Quantmoid4, false, false, 4));
+        yield return ("Int8 Pairwise K=2 Quantmoid4 dense skip", I8(128, 2, FeatureTransformerActivation.Pairwise, [32, 16], HiddenActivation.Quantmoid4, true, true));
         yield return ("Int8 SqrClippedReLU dense 16x3, 5 buckets", I8(128, 2, FeatureTransformerActivation.ClippedReLU, [16, 16, 16], HiddenActivation.SqrClippedReLU, true, false, 5));
         yield return ("Int8 CReLU dense+skip 16x3", I8(96, 2, FeatureTransformerActivation.ClippedReLU, [16, 16, 16], HiddenActivation.ClippedReLU, true, true));
         yield return ("Stockfish-like K=2 H=256, 3 stacks", NetworkSpec.CreateStockfishLike(400, 256, 32, 32, 3));
@@ -62,9 +68,9 @@ public sealed unsafe class CoreTests
     [DynamicData(nameof(SpecCases), DynamicDataDisplayName = nameof(SpecCaseName))]
     public void Backends_MatchTheScalarReferenceBitForBit(string name)
     {
-        NetworkSpec spec = SpecNamed(name);
+        var spec = SpecNamed(name);
         int trials = BackendTrials;
-        SimdBackend[] backends = [.. SimdSupport.AvailableForTesting];
+        SimdBackend[] backends = SimdSupport.AvailableForTesting.ToArray();
         Random r = new(123 + (name.GetHashCode() % 1000));
         {
             NnueModel model = RandomModel.Make(spec, r);
@@ -74,7 +80,7 @@ public sealed unsafe class CoreTests
                 foreach (SparseInputMode mode in spec.Precision == NetworkPrecision.Int8 ? Enum.GetValues<SparseInputMode>() : [SparseInputMode.Off])
                     evals.Add((new NnueEvaluator(model, b, mode), $"{b}/{mode}"));
             AccumulatorBuffer acc = model.CreateAccumulators(spec.Slots);
-            Accumulator[] slots = [.. Enumerable.Range(0, spec.Slots).Select(i => acc[i])];
+            Accumulator[] slots = Enumerable.Range(0, spec.Slots).Select(i => acc[i]).ToArray();
             HashSet<string> bad = [];
             for (int t = 0; t < trials; t++)
             {
@@ -87,7 +93,7 @@ public sealed unsafe class CoreTests
                     if (e.EvaluateRaw(slots, bucket) != expect)
                         _ = bad.Add(label);
             }
-            Assert.IsEmpty(bad, $"{name}: mismatching backends: {string.Join(", ", bad)}");
+            Assert.IsTrue(bad.Count == 0, $"{name}: mismatching backends: {string.Join(", ", bad)}");
         }
     }
 
@@ -96,7 +102,7 @@ public sealed unsafe class CoreTests
     [DynamicData(nameof(SpecCases), DynamicDataDisplayName = nameof(SpecCaseName))]
     public void AccumulatorOperations_RefreshAddRemoveAndUpdateAgree(string name)
     {
-        NetworkSpec spec = SpecNamed(name);
+        var spec = SpecNamed(name);
         int trials = AccumulatorTrials;
         Random r = new(7);
         {
@@ -114,10 +120,10 @@ public sealed unsafe class CoreTests
                 int mismatches = 0;
                 for (int t = 0; t < trials; t++)
                 {
-                    int[] a = [.. Enumerable.Range(0, r.Next(1, 20)).Select(_ => r.Next(F)).Distinct()];
-                    int[] bset = [.. Enumerable.Range(0, r.Next(1, 20)).Select(_ => r.Next(F)).Distinct()];
-                    int[] removed = [.. a.Except(bset)];
-                    int[] added = [.. bset.Except(a)];
+                    int[] a = Enumerable.Range(0, r.Next(1, 20)).Select(_ => r.Next(F)).Distinct().ToArray();
+                    int[] bset = Enumerable.Range(0, r.Next(1, 20)).Select(_ => r.Next(F)).Distinct().ToArray();
+                    int[] removed = a.Except(bset).ToArray();
+                    int[] added = bset.Except(a).ToArray();
 
                     e.RefreshAccumulator(inc, a);
                     foreach (int f in removed)
@@ -134,7 +140,7 @@ public sealed unsafe class CoreTests
                     if (!inc.AsSpan().SequenceEqual(fresh.AsSpan()) || !viaUpdate.AsSpan().SequenceEqual(fresh.AsSpan()) || !fresh.AsSpan().SequenceEqual(expect.AsSpan()))
                         mismatches++;
                 }
-                Assert.AreEqual(0, mismatches, $"{name} on {b}: refresh / add+remove / update disagree in {mismatches} of {trials} trials");
+                Assert.IsTrue(mismatches == 0, $"{name} on {b}: refresh / add+remove / update disagree in {mismatches} of {trials} trials");
             }
         }
     }
@@ -151,17 +157,17 @@ public sealed unsafe class CoreTests
         NnueEvaluator e = new(model);
         AccumulatorBuffer buf = model.CreateAccumulators(3);
         Accumulator foreign = other.CreateAccumulator();
-        e.RefreshAccumulator(buf[0], [1, 2, 3]);
-        e.RefreshAccumulator(buf[1], [4, 5]);
+        e.RefreshAccumulator(buf[0], new[] { 1, 2, 3 });
+        e.RefreshAccumulator(buf[1], new[] { 4, 5 });
 
-        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.RefreshAccumulator(buf[0], [100]), "feature == FeatureCount");
-        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.RefreshAccumulator(buf[0], [-1]), "negative feature");
-        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.UpdateAccumulator(buf[0], buf[1], [1], [1000]), "update: added feature out of range");
+        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.RefreshAccumulator(buf[0], new[] { 100 }), "feature == FeatureCount");
+        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.RefreshAccumulator(buf[0], new[] { -1 }), "negative feature");
+        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.UpdateAccumulator(buf[0], buf[1], new[] { 1 }, new[] { 1000 }), "update: added feature out of range");
         ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.AddFeature(buf[0], 100), "add: feature out of range");
         ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.Evaluate(buf[0], buf[1], 3), "bucket == OutputBuckets");
         ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => e.Evaluate(buf[0], buf[1], -1), "negative bucket");
         ExceptionAssert.Throws<ArgumentException>(() => e.Evaluate(buf[0], 0), "one slot given, model needs two");
-        ExceptionAssert.Throws<ArgumentException>(() => e.Evaluate([buf[0], buf[1], buf[2]], 0), "three slots given, model needs two");
+        ExceptionAssert.Throws<ArgumentException>(() => e.Evaluate(new[] { buf[0], buf[1], buf[2] }, 0), "three slots given, model needs two");
         ExceptionAssert.Throws<ArgumentException>(() => e.Evaluate(buf[0], foreign, 0), "accumulator of another model (size mismatch)");
         ExceptionAssert.Throws<ArgumentException>(() => e.ResetAccumulator(default), "default accumulator");
         ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => { Accumulator _ = buf[3]; }, "buffer index out of range");
@@ -169,24 +175,75 @@ public sealed unsafe class CoreTests
         // unchecked and checked give the same result on valid input
         for (int bucket = 0; bucket < 3; bucket++)
         {
-            Assert.AreEqual(e.EvaluateUnchecked(buf[0], buf[1], bucket), e.Evaluate(buf[0], buf[1], bucket), $"Evaluate == EvaluateUnchecked, bucket {bucket}");
-            Assert.AreEqual(e.Evaluate(buf[0], buf[1], bucket), e.Evaluate([buf[0], buf[1]], bucket), $"span overload == pair overload, bucket {bucket}");
+            Assert.IsTrue(e.Evaluate(buf[0], buf[1], bucket) == e.EvaluateUnchecked(buf[0], buf[1], bucket), $"Evaluate == EvaluateUnchecked, bucket {bucket}");
+            Assert.IsTrue(e.Evaluate(new[] { buf[0], buf[1] }, bucket) == e.Evaluate(buf[0], buf[1], bucket), $"span overload == pair overload, bucket {bucket}");
         }
-        e.UpdateAccumulatorUnchecked(buf[0], buf[2], [1], [7]);
-        e.UpdateAccumulator(buf[0], buf[1], [1], [7]);
+        e.UpdateAccumulatorUnchecked(buf[0], buf[2], new[] { 1 }, new[] { 7 });
+        e.UpdateAccumulator(buf[0], buf[1], new[] { 1 }, new[] { 7 });
         Assert.IsTrue(buf[1].AsSpan().SequenceEqual(buf[2].AsSpan()), "Update == UpdateAccumulatorUnchecked");
-        int viaFeatures = e.EvaluateFeatures([[2, 3, 7], [4, 5]], 1);
-        e.RefreshAccumulator(buf[0], [2, 3, 7]);
-        e.RefreshAccumulator(buf[1], [4, 5]);
-        Assert.AreEqual(e.Evaluate(buf[0], buf[1], 1), viaFeatures, "Evaluate(feature lists) == Evaluate(accumulators)");
+        int viaFeatures = e.EvaluateFeatures(new[] { new[] { 2, 3, 7 }, new[] { 4, 5 } }, 1);
+        e.RefreshAccumulator(buf[0], new[] { 2, 3, 7 });
+        e.RefreshAccumulator(buf[1], new[] { 4, 5 });
+        Assert.IsTrue(viaFeatures == e.Evaluate(buf[0], buf[1], 1), "Evaluate(feature lists) == Evaluate(accumulators)");
 
         // a model with one slot accepts the single-accumulator overload only
         NnueModel one = RandomModel.Make(new NetworkSpec { FeatureCount = 50, AccumulatorSize = 64, Slots = 1 }, r);
         NnueEvaluator e1 = new(one);
         Accumulator a1 = one.CreateAccumulator();
-        e1.RefreshAccumulator(a1, [3, 4]);
-        Assert.AreEqual(e1.EvaluateUnchecked(a1), e1.Evaluate(a1), "single slot: checked == unchecked");
+        e1.RefreshAccumulator(a1, new[] { 3, 4 });
+        Assert.IsTrue(e1.Evaluate(a1) == e1.EvaluateUnchecked(a1), "single slot: checked == unchecked");
         ExceptionAssert.Throws<ArgumentException>(() => e1.Evaluate(a1, a1, 0), "single-slot model rejects two slots");
+    }
+
+    // ------------------------------------------------------------------------------------------------ pooling and Quantmoid4 kernels
+    [TestMethod]
+    public unsafe void QuantmoidAndPoolingKernels_MatchTheFormulas()
+    {
+        // Quantmoid4: reference written independently of the kernels, including int.MinValue / int.MaxValue and the saturated ranges
+        static int Reference(int z)
+        {
+            int x = z >> 6, v = 127 - Math.Min(Math.Abs(x), 127), q = v * v / 256;
+            return x < 0 ? q : 126 - q;
+        }
+        const int n = 4096;
+        var r = new Random(5);
+        int* source = (int*)System.Runtime.InteropServices.NativeMemory.AlignedAlloc(n * sizeof(int), 64);
+        byte* scalar = (byte*)System.Runtime.InteropServices.NativeMemory.AlignedAlloc(n, 64);
+        byte* vector = (byte*)System.Runtime.InteropServices.NativeMemory.AlignedAlloc(n, 64);
+        short* accumulator = (short*)System.Runtime.InteropServices.NativeMemory.AlignedAlloc(n * sizeof(short), 64);
+        try
+        {
+            for (int i = 0; i < n; i++)
+                source[i] = i < 128 ? (i - 64) * 64 : i % 5 == 0 ? r.Next(int.MinValue, int.MaxValue) : r.Next(-20000, 20000);
+            source[0] = int.MinValue; source[1] = int.MaxValue; source[2] = 0; source[3] = -1; source[4] = 63; source[5] = 64;
+            Kernels.ScalarKernels.ActivateQuantmoid4(source, scalar, n);
+            Kernels.Portable128Kernels.ActivateQuantmoid4(source, vector, n);
+            for (int i = 0; i < n; i++)
+            {
+                Assert.IsTrue(scalar[i] == Reference(source[i]), $"scalar Quantmoid4({source[i]}) = {scalar[i]}, expected {Reference(source[i])}");
+                Assert.IsTrue(vector[i] == scalar[i], $"vector Quantmoid4({source[i]}) = {vector[i]}, scalar {scalar[i]}");
+            }
+            Assert.IsTrue(Reference(0) == 63 && Reference(1 << 20) == 126 && Reference(-(1 << 20)) == 0, "Quantmoid4 range: 63 at 0, 126 and 0 when saturated");
+
+            // pooling: both halves clamped to [0, 127]; the SIMD kernel against the scalar one on out-of-range values
+            int half = n / 4;
+            for (int i = 0; i < n; i++) accumulator[i] = (short)(i % 7 == 0 ? r.Next(-32768, 32767) : r.Next(-60, 200));
+            Kernels.ScalarKernels.ApplyMaxPooling(accumulator, scalar, half);
+            Kernels.Portable128Kernels.ApplyPooling(accumulator, vector, half, average: false);
+            for (int i = 0; i < half; i++) Assert.IsTrue(scalar[i] == vector[i], $"max pooling {i}: scalar {scalar[i]}, vector {vector[i]}");
+            Kernels.ScalarKernels.ApplyAveragePooling(accumulator, scalar, half);
+            Kernels.Portable128Kernels.ApplyPooling(accumulator, vector, half, average: true);
+            for (int i = 0; i < half; i++)
+            {
+                int a = Math.Clamp((int)accumulator[i], 0, 127), b = Math.Clamp((int)accumulator[i + half], 0, 127);
+                Assert.IsTrue(scalar[i] == (a + b + 1) / 2 && vector[i] == scalar[i], $"average pooling {i}: scalar {scalar[i]}, vector {vector[i]}, expected {(a + b + 1) / 2}");
+            }
+        }
+        finally
+        {
+            System.Runtime.InteropServices.NativeMemory.AlignedFree(source); System.Runtime.InteropServices.NativeMemory.AlignedFree(scalar);
+            System.Runtime.InteropServices.NativeMemory.AlignedFree(vector); System.Runtime.InteropServices.NativeMemory.AlignedFree(accumulator);
+        }
     }
 
     // ------------------------------------------------------------------------------------------------ layout, alignment, validation
@@ -194,7 +251,7 @@ public sealed unsafe class CoreTests
     [DynamicData(nameof(SpecCases), DynamicDataDisplayName = nameof(SpecCaseName))]
     public void Layout_StartsEveryTensorOn64ByteBoundaries(string name)
     {
-        NetworkSpec spec = SpecNamed(name);
+        var spec = SpecNamed(name);
         {
             NetworkLayout l = NetworkLayout.Create(spec);
             bool aligned = l.FeatureWeightsOffset % 64 == 0 && l.FeatureBiasOffset % 64 == 0 && l.BlobSize % 64 == 0;
@@ -206,7 +263,7 @@ public sealed unsafe class CoreTests
                         aligned &= l.GetDenseWeightsOffset(b, k) % 64 == 0 && l.GetDenseBiasOffset(b, k) % 64 == 0;
             Assert.IsTrue(aligned, $"{name}: all tensors start on 64-byte boundaries");
             NnueModel m = RandomModel.Make(spec, new Random(1));
-            Assert.AreEqual(0, (long)m.FtWeightsPtrValue() % 64, $"{name}: blob base is 64-byte aligned");
+            Assert.IsTrue((long)m.FtWeightsPtrValue() % 64 == 0, $"{name}: blob base is 64-byte aligned");
         }
     }
 
@@ -218,7 +275,7 @@ public sealed unsafe class CoreTests
         Assert.IsTrue(a == b && a.Equals(b) && a.GetHashCode() == b.GetHashCode(), "equal specs with separately created layer lists");
         Assert.IsTrue(a != (a with { HiddenLayerSizes = [16, 16] }), "different layer sizes");
         Assert.IsTrue(a == (a with { ActivationQuantization = a.DefaultActivationQuantization }), "explicit default quantization equals the implicit one");
-        Assert.Contains("HiddenLayerSizes = [16, 32]", a.ToString(), "ToString shows the layer sizes");
+        Assert.IsTrue(a.ToString().Contains("HiddenLayerSizes = [16, 32]"), "ToString shows the layer sizes");
         Assert.IsTrue(new NetworkSpec { HiddenLayerSizes = default }.HiddenLayerSizes.IsEmpty, "default(ImmutableArray) becomes empty");
     }
 
@@ -239,7 +296,7 @@ public sealed unsafe class CoreTests
     public void DenseWeights_CanBeSetAndReadPerInputOutputPair()
     {
         NetworkSpec spec = NetworkSpec.CreateInt8(100, 64, [16, 32], outputBuckets: 2);
-        Assert.AreEqual(3, spec.DenseLayerCount, "hidden layers + output layer");
+        Assert.IsTrue(spec.DenseLayerCount == 3, "hidden layers + output layer");
         NnueModelBuilder builder = new(spec);
         builder.SetDenseWeight(1, 0, 70, 5, 42);       // first layer: 128 inputs (2 slots x 64), 16 outputs
         builder.SetDenseWeight(1, 2, 31, 0, -17);      // output layer: 32 inputs, 1 output
@@ -284,6 +341,11 @@ public sealed unsafe class CoreTests
         ExceptionAssert.Throws<ArgumentException>(() => NetworkLayout.Create(new NetworkSpec { Precision = NetworkPrecision.Int8, AccumulatorSize = 96, Slots = 1 }), "Int8: Slots*H must be a multiple of 64");
         ExceptionAssert.Throws<ArgumentException>(() => NetworkLayout.Create(new NetworkSpec { Precision = NetworkPrecision.Int8, HiddenLayerSizes = [20] }), "hidden size not a multiple of 16");
         ExceptionAssert.Throws<ArgumentException>(() => NetworkLayout.Create(new NetworkSpec { Precision = NetworkPrecision.Int8, SkipConnection = true }), "skip without hidden layer");
+        ExceptionAssert.Throws<ArgumentException>(() => NetworkLayout.Create(new NetworkSpec { Activation = FeatureTransformerActivation.MaxPooling }), "max pooling needs Int8");
+        ExceptionAssert.Throws<ArgumentException>(() => NetworkLayout.Create(new NetworkSpec { Activation = FeatureTransformerActivation.AveragePooling }), "average pooling needs Int8");
+        ExceptionAssert.Throws<ArgumentException>(() => NetworkLayout.Create(new NetworkSpec { Precision = NetworkPrecision.Int8, Activation = FeatureTransformerActivation.MaxPooling, AccumulatorSize = 96 }), "pooling: H not a multiple of 64");
+        ExceptionAssert.Throws<ArgumentException>(() => new NetworkSpec { HiddenActivation = HiddenActivation.Quantmoid4 }.Validate(), "Quantmoid4 needs Int8");
+        Assert.IsTrue(new NetworkSpec { Precision = NetworkPrecision.Int8, Activation = FeatureTransformerActivation.MaxPooling, AccumulatorSize = 128 }.ActivationQuantization == 127, "pooling uses ActivationQuantization 127");
         ExceptionAssert.Throws<ArgumentException>(() => NetworkLayout.Create(new NetworkSpec { OutputBuckets = 0 }), "zero buckets");
         ExceptionAssert.Throws<ArgumentException>(() => new NetworkSpec { Precision = (NetworkPrecision)7 }.Validate(), "undefined precision");
         ExceptionAssert.Throws<ArgumentException>(() => new NetworkSpec { Activation = (FeatureTransformerActivation)9 }.Validate(), "undefined activation");
@@ -292,8 +354,8 @@ public sealed unsafe class CoreTests
         ExceptionAssert.Throws<ArgumentException>(() => NetworkSpec.CreateBuilder(100).WithAccumulatorSize(64).WithInt8(FeatureTransformerActivation.ClippedReLU, [4096, 4096, 4096])
             .WithSqrClippedHiddenActivation().Build(), "too many hidden activations in total");
         NnueModel model = RandomModel.Make(NetworkSpec.CreateSimple(10, 32), new Random(1));
-        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => _ = new NnueEvaluator(model, (SimdBackend)42), "undefined backend");
-        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => _ =new NnueEvaluator(model, sparseInput: (SparseInputMode)42), "undefined sparse mode");
+        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => new NnueEvaluator(model, (SimdBackend)42), "undefined backend");
+        ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => new NnueEvaluator(model, sparseInput: (SparseInputMode)42), "undefined sparse mode");
     }
 
     // ------------------------------------------------------------------------------------------------ storage
@@ -322,15 +384,15 @@ public sealed unsafe class CoreTests
             NnueEvaluator e2 = new(loaded);
             AccumulatorBuffer a = model.CreateAccumulators(spec.Slots);
             AccumulatorBuffer b2 = loaded.CreateAccumulators(spec.Slots);
-            Accumulator[] s1 = [.. Enumerable.Range(0, spec.Slots).Select(i => a[i])];
-            Accumulator[] s2 = [.. Enumerable.Range(0, spec.Slots).Select(i => b2[i])];
+            Accumulator[] s1 = Enumerable.Range(0, spec.Slots).Select(i => a[i]).ToArray();
+            Accumulator[] s2 = Enumerable.Range(0, spec.Slots).Select(i => b2[i]).ToArray();
             for (int i = 0; i < spec.Slots; i++)
             {
-                int[] f = [.. Enumerable.Range(0, 12).Select(_ => r.Next(spec.FeatureCount)).Distinct()];
+                int[] f = Enumerable.Range(0, 12).Select(_ => r.Next(spec.FeatureCount)).Distinct().ToArray();
                 e1.RefreshAccumulator(s1[i], f);
                 e2.RefreshAccumulator(s2[i], f);
             }
-            Assert.AreEqual(e2.Evaluate(s2, 0), e1.Evaluate(s1, 0), $"{name}: same evaluation after save/load");
+            Assert.IsTrue(e1.Evaluate(s1, 0) == e2.Evaluate(s2, 0), $"{name}: same evaluation after save/load");
         }
         ExceptionAssert.Throws<InvalidDataException>(() => NnueModel.Load(new MemoryStream(new byte[64])), "garbage file rejected");
         ExceptionAssert.Throws<InvalidDataException>(() => { MemoryStream ms = new(); NnueModel m = RandomModel.Make(new NetworkSpec { FeatureCount = 10, AccumulatorSize = 32 }, r); m.Save(ms); ms.SetLength(ms.Length - 100); ms.Position = 0; _ = NnueModel.Load(ms); }, "truncated file rejected");
@@ -348,7 +410,7 @@ public sealed unsafe class CoreTests
         Assert.IsTrue(buf[3].AsSpan()[0] == 1 && buf[4].AsSpan()[0] == 2 && buf[5].AsSpan()[0] == 6 && buf[2].AsSpan()[0] == 3, "Copy of a range");
         buf.Copy(0, 1, 3);                                           // overlapping, [1 1 2 3 ...]
         Assert.IsTrue(buf[0].AsSpan()[0] == 1 && buf[1].AsSpan()[0] == 1 && buf[2].AsSpan()[0] == 2 && buf[3].AsSpan()[0] == 3, "overlapping Copy behaves like memmove");
-        Assert.AreEqual(nuint.Zero, ((nuint)System.Runtime.CompilerServices.Unsafe.AsPointer(ref buf[2].AsSpan()[0])) % 64, "accumulators are 64-byte aligned");
+        Assert.IsTrue(((nuint)System.Runtime.CompilerServices.Unsafe.AsPointer(ref buf[2].AsSpan()[0])) % 64 == 0, "accumulators are 64-byte aligned");
         ExceptionAssert.Throws<ArgumentOutOfRangeException>(() => buf.Copy(5, 0, 2), "Copy range out of bounds");
         buf.Dispose();
         buf.Dispose();                                // idempotent
@@ -357,7 +419,7 @@ public sealed unsafe class CoreTests
         m2.Dispose();
         ExceptionAssert.Throws<ObjectDisposedException>(() => m2.CreateAccumulators(1), "disposed model refuses new accumulators");
         ExceptionAssert.Throws<ObjectDisposedException>(() => { Accumulator _ = buf[0]; }, "disposed buffer refuses access");
-        Assert.AreEqual(nuint.Zero, model.FtWeightsPtrValue() % 64, "model blob is 64-byte aligned");
+        Assert.IsTrue(model.FtWeightsPtrValue() % 64 == 0, "model blob is 64-byte aligned");
         Assert.IsTrue(buf.IsDisposed, "IsDisposed after Dispose");
         Assert.IsTrue(default(Accumulator).IsEmpty && default(Accumulator).AsSpan().IsEmpty && !model.CreateAccumulator().IsEmpty, "IsEmpty / AsSpan of a default handle");
         using AccumulatorBuffer small = model.CreateAccumulators(3);

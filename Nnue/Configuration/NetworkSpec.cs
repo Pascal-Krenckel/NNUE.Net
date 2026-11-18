@@ -33,7 +33,7 @@ public sealed record NetworkSpec
     /// <summary>Number of binary input features. Features are plain indices in [0, FeatureCount).</summary>
     public int FeatureCount { get; init; } = 768;
 
-    /// <summary>Width of one accumulator. Multiple of 32 (multiple of 64 for <see cref="FeatureTransformerActivation.Pairwise"/>).</summary>
+    /// <summary>Width of one accumulator. Multiple of 32 (multiple of 64 for <see cref="FeatureTransformerActivation.Pairwise"/> and the pooling activations).</summary>
     public int AccumulatorSize { get; init; } = 128;
 
     /// <summary>Number of accumulators the head consumes (1..64). They all come from the same transformer weights.</summary>
@@ -64,7 +64,7 @@ public sealed record NetworkSpec
     public int OutputBuckets { get; init; } = 1;
 
     private readonly int? _qa;
-    /// <summary>Accumulator scale. Defaults: 255 (Int16), 127 (Int8 + ClippedReLU), 255 (Int8 + Pairwise/SquaredClippedReLU), the only values the uint8 conversion supports.</summary>
+    /// <summary>Accumulator scale. Defaults: 255 (Int16), 127 (Int8 + ClippedReLU/MaxPooling/AveragePooling), 255 (Int8 + Pairwise/SquaredClippedReLU), the only values the uint8 conversion supports.</summary>
     public int ActivationQuantization { get => _qa ?? DefaultActivationQuantization; init => _qa = value; }
 
     private readonly int? _qb;
@@ -75,7 +75,10 @@ public sealed record NetworkSpec
     public int OutputScale { get; init; } = 400;
 
     /// <summary>The <see cref="ActivationQuantization"/> used when none is set: 127 for Int8 with clipped ReLU, 255 otherwise.</summary>
-    public int DefaultActivationQuantization => Precision == NetworkPrecision.Int8 && Activation == FeatureTransformerActivation.ClippedReLU ? 127 : 255;
+    public int DefaultActivationQuantization => Precision == NetworkPrecision.Int8 && Activation is FeatureTransformerActivation.ClippedReLU or FeatureTransformerActivation.MaxPooling or FeatureTransformerActivation.AveragePooling ? 127 : 255;
+
+    /// <summary>True when the activation combines the two halves of an accumulator (pairwise product or pooling), so a slot contributes <c>AccumulatorSize / 2</c> inputs.</summary>
+    internal bool HalvesAccumulator => Activation is FeatureTransformerActivation.Pairwise or FeatureTransformerActivation.MaxPooling or FeatureTransformerActivation.AveragePooling;
     /// <summary>The <see cref="OutputWeightQuantization"/> used when none is set: 64 for squared clipped ReLU, 256 otherwise.</summary>
     public int DefaultOutputWeightQuantization => Activation == FeatureTransformerActivation.SquaredClippedReLU ? 64 : 256;
 
@@ -145,8 +148,8 @@ public sealed record NetworkSpec
             throw new ArgumentException("AccumulatorSize must be a positive multiple of 32.");
         if (Slots is < 1 or > 64)
             throw new ArgumentException("Slots must be in [1, 64].");
-        if (Activation == FeatureTransformerActivation.Pairwise && AccumulatorSize % 64 != 0)
-            throw new ArgumentException("Pairwise activation needs AccumulatorSize to be a multiple of 64.");
+        if (HalvesAccumulator && AccumulatorSize % 64 != 0)
+            throw new ArgumentException($"{Activation} needs AccumulatorSize to be a multiple of 64.");
         if (OutputScale <= 0)
             throw new ArgumentException("OutputScale must be > 0.");
         if ((long)FeatureCount * AccumulatorSize > int.MaxValue / 2)
@@ -154,7 +157,7 @@ public sealed record NetworkSpec
         if (OutputBuckets is < 1 or > 256)
             throw new ArgumentException("OutputBuckets must be in [1, 256].");
 
-        int slotOut = Activation == FeatureTransformerActivation.Pairwise ? AccumulatorSize / 2 : AccumulatorSize;
+        int slotOut = HalvesAccumulator ? AccumulatorSize / 2 : AccumulatorSize;
         int ftOut = Slots * slotOut;
         if (ftOut > 16384)
             throw new ArgumentException("Slots * (accumulator output size) must not exceed 16384.");
@@ -163,8 +166,8 @@ public sealed record NetworkSpec
         {
             if (HiddenLayerSizes.Length != 0)
                 throw new ArgumentException("Hidden dense layers need Precision = Int8.");
-            if (Activation == FeatureTransformerActivation.Pairwise)
-                throw new ArgumentException("Pairwise activation needs Precision = Int8.");
+            if (HalvesAccumulator)
+                throw new ArgumentException($"{Activation} needs Precision = Int8.");
             if (HiddenActivation != HiddenActivation.ClippedReLU || DenseConnections || SkipConnection)
                 throw new ArgumentException("Hidden activation, dense connections and skip connection need Precision = Int8.");
             if (ActivationQuantization is < 1 or > 255)

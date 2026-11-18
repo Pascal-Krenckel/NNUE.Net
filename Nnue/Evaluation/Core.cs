@@ -65,6 +65,18 @@ internal static unsafe class Core<TB> where TB : struct, IBackend
                 for (int slot = 0; slot < slotCount; slot++)
                     TB.ApplySCReLU(accumulators[slot], transformerOutput + (slot * accumulatorSize), accumulatorSize);
                 break;
+            case FeatureTransformerActivation.MaxPooling:
+            {
+                int halfLength = accumulatorSize >> 1;
+                for (int slot = 0; slot < slotCount; slot++) TB.ApplyMaxPooling(accumulators[slot], transformerOutput + slot * halfLength, halfLength);
+                break;
+            }
+            case FeatureTransformerActivation.AveragePooling:
+            {
+                int halfLength = accumulatorSize >> 1;
+                for (int slot = 0; slot < slotCount; slot++) TB.ApplyAveragePooling(accumulators[slot], transformerOutput + slot * halfLength, halfLength);
+                break;
+            }
             default:
             {
                 int halfLength = accumulatorSize >> 1;
@@ -104,13 +116,19 @@ internal static unsafe class Core<TB> where TB : struct, IBackend
                 skipValue = layerOutput[step->OutputLength - 2] - layerOutput[step->OutputLength - 1];
 
             byte* destination = activations + step->ActivationOffset;
-            if (context.UsesSqrHidden)
+            switch (context.HiddenActivation)
             {
-                TB.ActivateSqrClippedReLU(layerOutput, destination, step->OutputLength);                        // [ sqr | clip ]
-                TB.ActivateClippedReLU(layerOutput, destination + step->OutputLength, step->OutputLength);
+                case HiddenActivation.SqrClippedReLU:
+                    TB.ActivateSqrClippedReLU(layerOutput, destination, step->OutputLength);                    // [ sqr | clip ]
+                    TB.ActivateClippedReLU(layerOutput, destination + step->OutputLength, step->OutputLength);
+                    break;
+                case HiddenActivation.Quantmoid4:
+                    TB.ActivateQuantmoid4(layerOutput, destination, step->OutputLength);
+                    break;
+                default:
+                    TB.ActivateClippedReLU(layerOutput, destination, step->OutputLength);
+                    break;
             }
-            else
-                TB.ActivateClippedReLU(layerOutput, destination, step->OutputLength);
         }
         throw new InvalidOperationException();
     }

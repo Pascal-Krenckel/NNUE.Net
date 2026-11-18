@@ -303,7 +303,7 @@ public sealed class NnueTrainer
         float[][] gB = w.GB[bucket];
         w.BucketUsed[bucket] = true;
         int last = _layers - 1;
-        bool sqr = _cfg.HiddenActivation == HiddenActivation.SqrClippedReLU;
+        bool sqr = _cfg.HiddenActivation == HiddenActivation.SqrClippedReLU, quantmoid = _cfg.HiddenActivation == HiddenActivation.Quantmoid4;
         Array.Clear(w.GAct);
         w.GZ[last][0] = g;
         for (int k = last; k >= 0; k--)
@@ -319,6 +319,9 @@ public sealed class NnueTrainer
                 if (sqr)
                     for (int j = 0; j < d.OutputLength; j++)
                         gz[j] = (w.GAct[at + j] * Activations.SqrClippedReLUDerivative(z[j])) + (w.GAct[at + d.OutputLength + j] * Activations.ClippedReLUDerivative(z[j]));
+                else if (quantmoid)
+                    for (int j = 0; j < d.OutputLength; j++)
+                        gz[j] = w.GAct[at + j] * Activations.Quantmoid4Derivative(z[j]);
                 else
                     for (int j = 0; j < d.OutputLength; j++)
                         gz[j] = w.GAct[at + j] * Activations.ClippedReLUDerivative(z[j]);
@@ -367,7 +370,7 @@ public sealed class NnueTrainer
         FtForward(w);
 
         int last = _layers - 1;
-        bool sqr = _cfg.HiddenActivation == HiddenActivation.SqrClippedReLU;
+        bool sqr = _cfg.HiddenActivation == HiddenActivation.SqrClippedReLU, quantmoid = _cfg.HiddenActivation == HiddenActivation.Quantmoid4;
         float skip = 0f;
         for (int k = 0; k <= last; k++)
         {
@@ -385,6 +388,9 @@ public sealed class NnueTrainer
             if (sqr)
                 for (int j = 0; j < d.OutputLength; j++)
                 { w.Act[at + j] = Activations.SqrClippedReLU(z[j]); w.Act[at + d.OutputLength + j] = Activations.ClippedReLU(z[j]); }
+            else if (quantmoid)
+                for (int j = 0; j < d.OutputLength; j++)
+                    w.Act[at + j] = Activations.Quantmoid4(z[j]);
             else
                 for (int j = 0; j < d.OutputLength; j++)
                     w.Act[at + j] = Activations.ClippedReLU(z[j]);
@@ -419,6 +425,14 @@ public sealed class NnueTrainer
                     for (int j = 0; j < h; j++)
                         x[o + j] = Activations.SquaredClippedReLU(acc[j]);
                     break;
+                case FeatureTransformerActivation.MaxPooling:
+                    for (int j = 0; j < slotOut; j++)
+                        x[o + j] = Activations.MaxPool(acc[j], acc[j + slotOut]);
+                    break;
+                case FeatureTransformerActivation.AveragePooling:
+                    for (int j = 0; j < slotOut; j++)
+                        x[o + j] = Activations.AveragePool(acc[j], acc[j + slotOut]);
+                    break;
                 default:   // pairwise
                     for (int j = 0; j < slotOut; j++)
                         x[o + j] = Activations.ClippedReLU(acc[j]) * Activations.ClippedReLU(acc[j + slotOut]);
@@ -446,6 +460,23 @@ public sealed class NnueTrainer
                 case FeatureTransformerActivation.SquaredClippedReLU:
                     for (int j = 0; j < h; j++)
                         d[j] = gx[o + j] * Activations.SquaredClippedReLUDerivative(acc[j]);
+                    break;
+                case FeatureTransformerActivation.MaxPooling:   // the gradient goes to the larger clipped input (the first one on a tie)
+                    for (int j = 0; j < slotOut; j++)
+                    {
+                        float a = acc[j], b = acc[j + slotOut], g = gx[o + j];
+                        bool first = Activations.ClippedReLU(a) >= Activations.ClippedReLU(b);
+                        d[j] = first ? g * Activations.ClippedReLUDerivative(a) : 0f;
+                        d[j + slotOut] = first ? 0f : g * Activations.ClippedReLUDerivative(b);
+                    }
+                    break;
+                case FeatureTransformerActivation.AveragePooling:
+                    for (int j = 0; j < slotOut; j++)
+                    {
+                        float g = 0.5f * gx[o + j];
+                        d[j] = g * Activations.ClippedReLUDerivative(acc[j]);
+                        d[j + slotOut] = g * Activations.ClippedReLUDerivative(acc[j + slotOut]);
+                    }
                     break;
                 default:   // pairwise: out_j = clip(a_j) * clip(a_{j+half})
                     for (int j = 0; j < slotOut; j++)

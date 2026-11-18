@@ -35,6 +35,9 @@ public sealed class TrainingTests
             ("Int8 CReLU K=2 16-32",               I8(64, 2, FeatureTransformerActivation.ClippedReLU, [16, 32])),
             ("Int8 SCReLU K=1 16",                 I8(64, 1, FeatureTransformerActivation.SquaredClippedReLU, [16])),
             ("Int8 Pairwise K=1 32-32",            I8(128, 1, FeatureTransformerActivation.Pairwise, [32, 32])),
+            ("Int8 MaxPooling K=1 32-16",          I8(128, 1, FeatureTransformerActivation.MaxPooling, [32, 16])),
+            ("Int8 AveragePooling K=2 16",         I8(128, 2, FeatureTransformerActivation.AveragePooling, [16])),
+            ("Int8 Quantmoid4 K=2 32-16 dense skip", I8(64, 2, FeatureTransformerActivation.ClippedReLU, [32, 16], HiddenActivation.Quantmoid4, true, true)),
             ("Int8 SqrClippedReLU K=2 32-16",            I8(64, 2, FeatureTransformerActivation.ClippedReLU, [32, 16], HiddenActivation.SqrClippedReLU)),
             ("Int8 dense+skip K=3 16x3",           I8(64, 3, FeatureTransformerActivation.ClippedReLU, [16, 16, 16], HiddenActivation.ClippedReLU, true, true)),
             ("Stockfish-like K=2, 4 buckets",      NetworkSpec.CreateStockfishLike(300, 128, 32, 32, 4)),
@@ -101,6 +104,9 @@ public sealed class TrainingTests
         Case("Int8 dense connections: final layer reads layer 0", Int8(1, 64, 16, 16) with { DenseConnections = true }, n => { n.FeatureWeights[0] = 1f; n.DenseLayers[0][0].Weights[0] = 0.625f; n.DenseLayers[0][2].Weights[0] = 1.5f; }, One(0), 0.625 * 1.5 * 400);
         Case("Int8 no dense connections: final layer reads layer 1 only", Int8(1, 64, 16, 16), n => { n.FeatureWeights[0] = 1f; n.DenseLayers[0][0].Weights[0] = 0.625f; n.DenseLayers[0][2].Weights[0] = 1.5f; }, One(0), 0.0);
         Case("Int8 pairwise: clip(1.0) * clip(1.0) * 1.875", Int8(1, 128) with { Activation = FeatureTransformerActivation.Pairwise }, n => { n.FeatureWeights[0] = 1f; n.FeatureWeights[64] = 1f; n.DenseLayers[0][0].Weights[0] = 1.875f; }, One(0), 1.875 * 400);
+        Case("Int8 max pooling: max(1.0, 63/127) * 1.875", Int8(1, 128) with { Activation = FeatureTransformerActivation.MaxPooling }, n => { n.FeatureWeights[0] = 1f; n.FeatureWeights[64] = 63f / 127f; n.DenseLayers[0][0].Weights[0] = 1.875f; }, One(0), 1.0 * 1.875 * 400);
+        Case("Int8 average pooling: (1.0 + 63/127) / 2 * 1.875", Int8(1, 128) with { Activation = FeatureTransformerActivation.AveragePooling }, n => { n.FeatureWeights[0] = 1f; n.FeatureWeights[64] = 63f / 127f; n.DenseLayers[0][0].Weights[0] = 1.875f; }, One(0), (1.0 + 63.0 / 127) / 2 * 1.875 * 400);
+        Case("Int8 Quantmoid4 hidden: quantmoid4(0.5) * 1.875", Int8(1, 64, 16) with { HiddenActivation = HiddenActivation.Quantmoid4 }, n => { n.FeatureWeights[0] = 1f; n.DenseLayers[0][0].Weights[0] = 0.5f; n.DenseLayers[0][1].Weights[0] = 1.875f; }, One(0), (126.0 / 127 - 127.0 / 256 * 0.25) * 1.875 * 400);
         Case("Int8 SCReLU FT: (192/255)^2 * 1.875", Int8(1, 64) with { Activation = FeatureTransformerActivation.SquaredClippedReLU }, n => { n.FeatureWeights[0] = 192f / 255f; n.DenseLayers[0][0].Weights[0] = 1.875f; }, One(0), Math.Pow(192.0 / 255, 2) * 1.875 * 400);
         Case("Int16 SCReLU: (192/255)^2 * 1.5", new NetworkSpec { FeatureCount = 8, AccumulatorSize = 64, Activation = FeatureTransformerActivation.SquaredClippedReLU }, n => { n.FeatureWeights[0] = 192f / 255f; n.DenseLayers[0][0].Weights[0] = 1.5f; }, One(0), Math.Pow(192.0 / 255, 2) * 1.5 * 400);
         Case("Int16 CReLU: clip(1.0) * 1.5", new NetworkSpec { FeatureCount = 8, AccumulatorSize = 64 }, n => { n.FeatureWeights[0] = 1f; n.DenseLayers[0][0].Weights[0] = 1.5f; }, One(0), 1.5 * 400);

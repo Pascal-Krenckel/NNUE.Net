@@ -84,7 +84,7 @@ public sealed unsafe class NnueEvaluator
             BucketCount = _bucketCount,
             ClipMax = spec.ActivationQuantization,
             IsInt8 = spec.Precision == NetworkPrecision.Int8,
-            UsesSqrHidden = spec.HiddenActivation == HiddenActivation.SqrClippedReLU,
+            HiddenActivation = spec.HiddenActivation,
             HasSkipConnection = spec.SkipConnection,
             Activation = spec.Activation,
             Steps = model.Steps,
@@ -356,6 +356,12 @@ public sealed unsafe class NnueEvaluator
                         break;
                     case FeatureTransformerActivation.SquaredClippedReLU:
                         ScalarKernels.ApplySCReLU(accumulator, f + (s * h), h);
+                        break;
+                    case FeatureTransformerActivation.MaxPooling:
+                        ScalarKernels.ApplyMaxPooling(accumulator, f + (s * half), half);
+                        break;
+                    case FeatureTransformerActivation.AveragePooling:
+                        ScalarKernels.ApplyAveragePooling(accumulator, f + (s * half), half);
                         break;
                     default:
                         ScalarKernels.ApplyPairwise(accumulator, f + (s * half), half);

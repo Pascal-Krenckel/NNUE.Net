@@ -10,4 +10,10 @@ public enum HiddenActivation
     /// Int8: sqr = min(127, z_int^2 >> 19), clip = clamp(z_int >> 6, 0, 127).
     /// </summary>
     SqrClippedReLU = 1,
+    /// <summary>
+    /// Quantmoid4, a piecewise quadratic approximation of sigmoid(4z) that needs only integer arithmetic: one value per output in [0, 126/127].
+    /// Float: v = 1 - min(|z|, 1), q = 127/256 * v^2, out = z &lt; 0 ? q : 126/127 - q.
+    /// Int8: x = z_int >> 6, v = 127 - min(|x|, 127), q = v^2 >> 8, out = x &lt; 0 ? q : 126 - q.
+    /// </summary>
+    Quantmoid4 = 2,
 }

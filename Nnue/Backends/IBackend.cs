@@ -18,6 +18,8 @@ internal unsafe interface IBackend
     static abstract void ApplyCReLU(short* accumulator, byte* output, int length);
     static abstract void ApplySCReLU(short* accumulator, byte* output, int length);
     static abstract void ApplyPairwise(short* accumulator, byte* output, int halfLength);
+    static abstract void ApplyMaxPooling(short* accumulator, byte* output, int halfLength);
+    static abstract void ApplyAveragePooling(short* accumulator, byte* output, int halfLength);
     static abstract void AffineTransform(byte* input, sbyte* weights, int* biases, int* output, int inputLength, int paddedOutputLength);
     static abstract void AffineTransformSparse(byte* input, sbyte* weights, int* biases, int* nonZeroChunks, int nonZeroCount, int* output, int paddedOutputLength);
     static abstract int AffineTransformSingleOutput(byte* input, sbyte* weights, int bias, int paddedInputLength);
@@ -25,4 +27,5 @@ internal unsafe interface IBackend
     static abstract int FindNonZeroChunks(byte* input, int* nonZeroChunks, int inputLength);
     static abstract void ActivateClippedReLU(int* source, byte* destination, int length);
     static abstract void ActivateSqrClippedReLU(int* source, byte* destination, int length);
+    static abstract void ActivateQuantmoid4(int* source, byte* destination, int length);
 }

@@ -48,19 +48,25 @@ public static class SimdSupport
     /// <see cref="SimdBackend.Avx512"/> (on CPUs that also have the 256-bit AVX-VNNI it measured about equal or faster), else
     /// <see cref="SimdBackend.AvxVnni"/> on AVX2 CPUs with AVX-VNNI, then AVX2, SSSE3, NEON with dot product, NEON, scalar.
     /// </summary>
-    public static SimdBackend Best => IsSupported(SimdBackend.Avx512Vnni)
-                ? SimdBackend.Avx512Vnni
-                : IsSupported(SimdBackend.Avx512)
-                ? SimdBackend.Avx512
-                : IsSupported(SimdBackend.AvxVnni)
-                ? SimdBackend.AvxVnni
-                : IsSupported(SimdBackend.Avx2)
+    public static SimdBackend Best
+    {
+        get
+        {
+            if (IsSupported(SimdBackend.Avx512Vnni))
+                return SimdBackend.Avx512Vnni;
+            if (IsSupported(SimdBackend.Avx512))
+                return SimdBackend.Avx512;
+            if (IsSupported(SimdBackend.AvxVnni))
+                return SimdBackend.AvxVnni;
+            return IsSupported(SimdBackend.Avx2)
                 ? SimdBackend.Avx2
                 : IsSupported(SimdBackend.Sse)
                 ? SimdBackend.Sse
                 : IsSupported(SimdBackend.NeonDotProd)
                 ? SimdBackend.NeonDotProd
                 : IsSupported(SimdBackend.Neon) ? SimdBackend.Neon : SimdBackend.Scalar;
+        }
+    }
 
     /// <summary>All real backends the current CPU can run.</summary>
     public static IEnumerable<SimdBackend> Available =>

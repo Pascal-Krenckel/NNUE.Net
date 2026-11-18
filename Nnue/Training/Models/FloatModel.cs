@@ -93,6 +93,14 @@ public sealed class FloatModel
                     for (int j = 0; j < h; j++)
                         x0[(s * slotOut) + j] = Activations.SquaredClippedReLU(acc[j]);
                     break;
+                case FeatureTransformerActivation.MaxPooling:
+                    for (int j = 0; j < slotOut; j++)
+                        x0[(s * slotOut) + j] = Activations.MaxPool(acc[j], acc[j + slotOut]);
+                    break;
+                case FeatureTransformerActivation.AveragePooling:
+                    for (int j = 0; j < slotOut; j++)
+                        x0[(s * slotOut) + j] = Activations.AveragePool(acc[j], acc[j + slotOut]);
+                    break;
                 default:
                     for (int j = 0; j < slotOut; j++)
                         x0[(s * slotOut) + j] = Activations.ClippedReLU(acc[j]) * Activations.ClippedReLU(acc[j + slotOut]);
@@ -125,6 +133,9 @@ public sealed class FloatModel
             if (Spec.HiddenActivation == HiddenActivation.SqrClippedReLU)
                 for (int o = 0; o < d.OutputLength; o++)
                 { buf[at + o] = Activations.SqrClippedReLU(z[o]); buf[at + d.OutputLength + o] = Activations.ClippedReLU(z[o]); }
+            else if (Spec.HiddenActivation == HiddenActivation.Quantmoid4)
+                for (int o = 0; o < d.OutputLength; o++)
+                    buf[at + o] = Activations.Quantmoid4(z[o]);
             else
                 for (int o = 0; o < d.OutputLength; o++)
                     buf[at + o] = Activations.ClippedReLU(z[o]);

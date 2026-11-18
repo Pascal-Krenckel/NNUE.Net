@@ -1,4 +1,4 @@
-# Nnue.Net
+# NNUE.Net
 
 A feature-agnostic NNUE library for .NET 8, 10 and 11: evaluation, incremental updates, training, quantization and storage of
 *efficiently updatable neural networks*, the kind of network Stockfish uses to evaluate chess positions.
@@ -21,7 +21,7 @@ features ──(shared int16 weights)──▶ K accumulators ("slots") ──ac
 ## Installation
 
 ```
-dotnet add package Nnue.Net
+dotnet add package NNUE.Net
 ```
 
 The package contains builds for net8.0, net10.0 and net11.0. The net11.0 build adds the AVX512-VNNI backend; otherwise the

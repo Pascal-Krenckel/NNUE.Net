@@ -10,7 +10,7 @@ centipawns or a game result are concepts of the layer you build on top of it. It
   dot product) and a scalar reference, all bit-identical, selected automatically for the CPU.
 - **Incremental accumulator updates**: one call computes `child = parent - removed + added`; going back to the parent is free.
 - **Two arithmetics**: a single int16 output layer (simple and accurate), or Stockfish-style int8 layers (uint8 activations, int8
-  weights, any number of hidden layers, pairwise and squared activations, dense and skip connections, output buckets).
+  weights, any number of hidden layers, pairwise, pooling, squared and Quantmoid4 activations, dense and skip connections, output buckets).
 - **Training and quantization** for small networks (float model, Adam trainer, gradient check, quantizer with overflow report).
 - **Loading** from files, streams, memory, asynchronously or memory-mapped, and **import** of networks trained with bullet.
 
